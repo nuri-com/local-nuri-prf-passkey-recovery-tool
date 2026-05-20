@@ -154,7 +154,8 @@ textarea:focus {
 .singleAction {
   display: grid;
   min-height: 300px;
-  align-items: center;
+  align-content: center;
+  gap: 14px;
 }
 
 .singleAction button {
@@ -202,6 +203,10 @@ button.secondary:hover {
 }
 
 .message {
+  margin-bottom: 16px;
+}
+
+#metadataStatus {
   margin-bottom: 16px;
 }
 

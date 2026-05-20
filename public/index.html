@@ -17,6 +17,10 @@
         </div>
 
         <div class="singleAction">
+          <label>
+            <span>Recovery bundle or server metadata</span>
+            <textarea id="recoveryBundle" rows="9" placeholder="Optional: paste Nuri CSV export, Arkade v4 recovery backup plaintext, public envelope, or descriptor JSON"></textarea>
+          </label>
           <button id="recoverButton" type="button">Recover Keypairs</button>
         </div>
       </section>
@@ -28,8 +32,17 @@
         </div>
 
         <div id="message" class="message neutral">No recovery run yet.</div>
+        <p id="metadataStatus" class="status neutral">No server lookup yet.</p>
 
         <div class="outputGrid">
+          <label>
+            <span>CSV exit metadata</span>
+            <textarea id="recoveryOutput" readonly rows="12"></textarea>
+          </label>
+          <label>
+            <span>UTXOs and wait time</span>
+            <textarea id="utxoOutput" readonly rows="12"></textarea>
+          </label>
           <label>
             <span>Bitcoin address</span>
             <textarea id="bitcoinAddress" readonly rows="2"></textarea>
