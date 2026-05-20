@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>Nuri Passkey PRF Recovery</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main class="shell">
+      <section class="panel">
+        <div class="heading">
+          <p class="eyebrow">Offline recovery</p>
+          <h1>Nuri Passkey PRF Recovery</h1>
+          <p id="originStatus" class="status neutral">Checking origin...</p>
+        </div>
+
+        <div class="singleAction">
+          <button id="recoverButton" type="button">Recover Keypairs</button>
+        </div>
+      </section>
+
+      <section class="panel results">
+        <div class="heading compact">
+          <p class="eyebrow">Output</p>
+          <h2>Recovered keypairs</h2>
+        </div>
+
+        <div id="message" class="message neutral">No recovery run yet.</div>
+
+        <div class="outputGrid">
+          <label>
+            <span>Bitcoin address</span>
+            <textarea id="bitcoinAddress" readonly rows="2"></textarea>
+          </label>
+          <label>
+            <span>Bitcoin private key</span>
+            <textarea id="bitcoinPrivateKey" readonly rows="2"></textarea>
+          </label>
+          <label>
+            <span>Bitcoin public key</span>
+            <textarea id="bitcoinPublicKey" readonly rows="2"></textarea>
+          </label>
+          <label>
+            <span>Ethereum address</span>
+            <textarea id="ethereumAddress" readonly rows="2"></textarea>
+          </label>
+          <label>
+            <span>Ethereum private key</span>
+            <textarea id="ethereumPrivateKey" readonly rows="2"></textarea>
+          </label>
+          <label>
+            <span>Ethereum public key</span>
+            <textarea id="ethereumPublicKey" readonly rows="3"></textarea>
+          </label>
+          <label>
+            <span>Export JSON</span>
+            <textarea id="exportJson" readonly rows="10"></textarea>
+          </label>
+        </div>
+
+      </section>
+    </main>
+
+    <script src="/app.bundle.js"></script>
+  </body>
+</html>

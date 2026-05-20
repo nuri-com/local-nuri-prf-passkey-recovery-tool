@@ -1,0 +1,27 @@
+{
+  "appName": "Nuri Passkey PRF Recovery",
+  "rpId": "nuri.com",
+  "expectedOrigin": "https://nuri.com:8443",
+  "defaultUserVerification": "required",
+  "salt": {
+    "label": "PRF salt",
+    "encoding": "hex",
+    "value": ""
+  },
+  "secondSalt": {
+    "label": "Second PRF salt",
+    "encoding": "hex",
+    "value": ""
+  },
+  "credentialId": {
+    "encoding": "base64url",
+    "value": ""
+  },
+  "derivations": [
+    {
+      "id": "raw-prf",
+      "label": "Raw PRF output",
+      "type": "raw"
+    }
+  ]
+}

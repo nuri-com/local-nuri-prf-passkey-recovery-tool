@@ -1,0 +1,22 @@
+{
+  "name": "nuri-rpid-passkey-prf-recovery",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Offline WebAuthn PRF recovery helper for passkeys scoped to nuri.com.",
+  "scripts": {
+    "build:browser": "esbuild src/browser/app.js --bundle --format=iife --target=es2022 --outfile=public/app.bundle.js",
+    "start": "node src/server.mjs",
+    "check": "node --check src/server.mjs && node --check src/browser/app.js && npm run build:browser"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@noble/curves": "^2.2.0",
+    "@noble/hashes": "^2.2.0",
+    "@scure/bip32": "^2.2.0",
+    "bech32": "^2.0.0",
+    "esbuild": "^0.27.7"
+  }
+}
