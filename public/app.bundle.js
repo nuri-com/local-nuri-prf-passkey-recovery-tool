@@ -7893,7 +7893,6 @@
   var NURI_RP_ID = "nuri.com";
   var NURI_PRF_INPUT = "nuri-prf-salt-v1";
   var NURI_KDF_DOMAIN = "app:nuri.com|wallet|v1";
-  var CREDENTIAL_STORAGE_KEY = "nuri-prf-recovery:credentialId";
   var USER_VERIFICATION = "required";
   var LEGACY_CSV_CANDIDATES = [
     { id: "legacy-main-external", label: "Legacy Bitcoin CSV external", csvBlocks: 52500 },
@@ -8009,16 +8008,6 @@
   }
   function bytesToBase64url(bytes) {
     return bytesToBase64(bytes).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/u, "");
-  }
-  function base64urlToBytes(value) {
-    const base64 = value.trim().replace(/-/g, "+").replace(/_/g, "/");
-    const normalized = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
-    const binary = atob(normalized);
-    const bytes = new Uint8Array(binary.length);
-    for (let index = 0; index < binary.length; index += 1) {
-      bytes[index] = binary.charCodeAt(index);
-    }
-    return bytes;
   }
   function bytesToArrayBuffer(bytes) {
     return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
@@ -8472,23 +8461,10 @@
     return result ? arrayBufferToBytes(result) : null;
   }
   async function recoverPrf() {
-    const cachedCredentialId = localStorage.getItem(CREDENTIAL_STORAGE_KEY);
-    if (cachedCredentialId) {
-      try {
-        setMessage("Waiting for passkey verification...", "neutral");
-        const credential2 = await credentialsGet(prfByCredentialOptions(base64urlToBytes(cachedCredentialId)));
-        const prf2 = extractPrf(credential2);
-        if (prf2) return { credential: credential2, prf: prf2, mode: "cached-credential" };
-      } catch (error) {
-        localStorage.removeItem(CREDENTIAL_STORAGE_KEY);
-        console.warn("Cached credential PRF failed; falling back to discovery.", error);
-      }
-    }
     try {
-      setMessage("Waiting for passkey verification...", "neutral");
+      setMessage("Select the Nuri passkey...", "neutral");
       const credential2 = await credentialsGet(directPrfOptions());
       const credentialBytes2 = arrayBufferToBytes(credential2.rawId);
-      localStorage.setItem(CREDENTIAL_STORAGE_KEY, bytesToBase64url(credentialBytes2));
       const prf2 = extractPrf(credential2);
       if (prf2) return { credential: credential2, prf: prf2, mode: "direct-prf" };
       setMessage("Passkey selected. Waiting for PRF verification...", "neutral");
@@ -8501,7 +8477,6 @@
     setMessage("Select the Nuri passkey...", "neutral");
     const discoveredCredential = await credentialsGet(basePublicKeyOptions());
     const credentialBytes = arrayBufferToBytes(discoveredCredential.rawId);
-    localStorage.setItem(CREDENTIAL_STORAGE_KEY, bytesToBase64url(credentialBytes));
     setMessage("Passkey selected. Waiting for PRF verification...", "neutral");
     const credential = await credentialsGet(prfByCredentialOptions(credentialBytes));
     const prf = extractPrf(credential);
