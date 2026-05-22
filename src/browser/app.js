@@ -23,6 +23,7 @@ const elements = {
   importDumpButton: document.querySelector("#importDumpButton"),
   buildSweepButton: document.querySelector("#buildSweepButton"),
   broadcastSweepButton: document.querySelector("#broadcastSweepButton"),
+  actionStatus: document.querySelector("#actionStatus"),
   originStatus: document.querySelector("#originStatus"),
   message: document.querySelector("#message"),
   recoveryBundle: document.querySelector("#recoveryBundle"),
@@ -555,6 +556,21 @@ function setButtonState(button, enabled, reason = "") {
   button.setAttribute("aria-disabled", enabled ? "false" : "true");
 }
 
+function nextActionStatus() {
+  if (actionBusy) return "Working...";
+  if (!lastSweepContext) {
+    return hasImportableDump()
+      ? "Click Import Dump to scan UTXOs before building a sweep transaction."
+      : "Paste a recovery dump, or use Recover Keypairs if the passkey is still available.";
+  }
+  if (!hasSweepDestination()) return "Enter a destination Bitcoin address to build a signed sweep transaction.";
+  if (!lastSweepTransaction?.rawTxHex) return "Click Build Sweep TX to create the signed raw transaction.";
+  if (!lastSweepTransaction.broadcastableNow) {
+    return `Raw transaction built. Broadcast unlocks at height ${lastSweepTransaction.latestUnlockHeight || "unknown"}.`;
+  }
+  return "Signed transaction is ready to broadcast.";
+}
+
 function updateActionState() {
   const secureOrigin =
     window.isSecureContext &&
@@ -586,6 +602,7 @@ function updateActionState() {
       ? "Build a signed sweep transaction first."
       : "CSV is still locked; wait until the displayed unlock height."
   );
+  elements.actionStatus.textContent = nextActionStatus();
 }
 
 function setActionBusy(value) {
