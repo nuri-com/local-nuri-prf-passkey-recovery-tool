@@ -549,15 +549,6 @@ function hasSweepDestination() {
   return Boolean(elements.sweepAddress.value.trim());
 }
 
-function hasSignableSweepContext() {
-  return Boolean(
-    lastSweepContext?.bitcoinKey?.privateKeyHex &&
-      lastSweepContext.bitcoinKey.matchesCsvUserKey &&
-      lastSweepContext.csvCandidates?.length &&
-      lastSweepContext.utxoLookup?.results?.some((result) => result.ok && result.utxos?.length)
-  );
-}
-
 function setButtonState(button, enabled, reason = "") {
   button.disabled = !enabled;
   button.title = enabled ? "" : reason;
@@ -583,12 +574,10 @@ function updateActionState() {
   );
   setButtonState(
     elements.buildSweepButton,
-    !actionBusy && hasSignableSweepContext() && hasSweepDestination(),
+    !actionBusy && Boolean(lastSweepContext) && hasSweepDestination(),
     !lastSweepContext
       ? "Import a recovery dump with UTXOs first."
-      : !hasSignableSweepContext()
-        ? "Imported dump needs a matching Bitcoin private key and UTXOs."
-        : "Enter a sweep destination address first."
+      : "Enter a sweep destination address first."
   );
   setButtonState(
     elements.broadcastSweepButton,
