@@ -1697,7 +1697,7 @@
         throw new Error(`CURVE.${p} must be positive bigint`);
     }
     const Fp = createField(CURVE.p, curveOpts.Fp, FpFnLE);
-    const Fn3 = createField(CURVE.n, curveOpts.Fn, FpFnLE);
+    const Fn4 = createField(CURVE.n, curveOpts.Fn, FpFnLE);
     const _b = type === "weierstrass" ? "b" : "d";
     const params = ["Gx", "Gy", "a", _b];
     for (const p of params) {
@@ -1705,7 +1705,7 @@
         throw new Error(`CURVE.${p} must be valid field element of CURVE.Fp`);
     }
     CURVE = Object.freeze(Object.assign({}, CURVE));
-    return { CURVE, Fp, Fn: Fn3 };
+    return { CURVE, Fp, Fn: Fn4 };
   }
   function createKeygen(randomSecretKey, getPublicKey) {
     return function keygen(seed) {
@@ -1816,11 +1816,11 @@
       throw new Error('Signature format must be "compact", "recovered", or "der"');
     return format;
   }
-  function validateSigOpts(opts, def) {
+  function validateSigOpts(opts, def2) {
     validateObject(opts);
     const optsn = {};
-    for (let optName of Object.keys(def)) {
-      optsn[optName] = opts[optName] === void 0 ? def[optName] : opts[optName];
+    for (let optName of Object.keys(def2)) {
+      optsn[optName] = opts[optName] === void 0 ? def2[optName] : opts[optName];
     }
     abool(optsn.lowS, "lowS");
     abool(optsn.prehash, "prehash");
@@ -1951,7 +1951,7 @@
   function weierstrass(params, extraOpts = {}) {
     const validated = createCurveFields("weierstrass", params, extraOpts);
     const Fp = validated.Fp;
-    const Fn3 = validated.Fn;
+    const Fn4 = validated.Fn;
     let CURVE = validated.CURVE;
     const { h: cofactor, n: CURVE_ORDER2 } = CURVE;
     validateObject(extraOpts, {}, {
@@ -1968,7 +1968,7 @@
         throw new Error('invalid endo: expected "beta": bigint and "basises": array');
       }
     }
-    const lengths = getWLengths(Fp, Fn3);
+    const lengths = getWLengths(Fp, Fn4);
     function assertCompressionIsSupported() {
       if (!Fp.isOdd)
         throw new Error("compression is not supported: Field does not have .isOdd()");
@@ -2054,7 +2054,7 @@
     function splitEndoScalarN(k) {
       if (!endo || !endo.basises)
         throw new Error("no endo");
-      return _splitEndoScalar(k, endo.basises, Fn3.ORDER);
+      return _splitEndoScalar(k, endo.basises, Fn4.ORDER);
     }
     function finishEndo(endoBeta, k1p, k2p, k1neg, k2neg) {
       k2p = new Point4(Fp.mul(k2p.X, endoBeta), k2p.Y, k2p.Z);
@@ -2071,7 +2071,7 @@
       // math field
       static Fp = Fp;
       // scalar field
-      static Fn = Fn3;
+      static Fn = Fn4;
       X;
       Y;
       Z;
@@ -2271,7 +2271,7 @@
        */
       multiply(scalar) {
         const { endo: endo2 } = extraOpts;
-        if (!Fn3.isValidNot0(scalar))
+        if (!Fn4.isValidNot0(scalar))
           throw new RangeError("invalid scalar: out of range");
         let point, fake;
         const mul = (n) => wnaf.cached(this, n, (p) => normalizeZ(Point4, p));
@@ -2297,7 +2297,7 @@
         const { endo: endo2 } = extraOpts;
         const p = this;
         const sc = scalar;
-        if (!Fn3.isValid(sc))
+        if (!Fn4.isValid(sc))
           throw new RangeError("invalid scalar: out of range");
         if (sc === _0n4 || p.is0())
           return Point4.ZERO;
@@ -2373,7 +2373,7 @@
         return `<Point ${this.is0() ? "ZERO" : this.toHex()}>`;
       }
     }
-    const bits = Fn3.BITS;
+    const bits = Fn4.BITS;
     const wnaf = new wNAF(Point4, extraOpts.endo ? Math.ceil(bits / 2) : bits);
     if (bits >= 8)
       Point4.BASE.precompute(8);
@@ -2384,27 +2384,27 @@
   function pprefix(hasEvenY) {
     return Uint8Array.of(hasEvenY ? 2 : 3);
   }
-  function getWLengths(Fp, Fn3) {
+  function getWLengths(Fp, Fn4) {
     return {
-      secretKey: Fn3.BYTES,
+      secretKey: Fn4.BYTES,
       publicKey: 1 + Fp.BYTES,
       publicKeyUncompressed: 1 + 2 * Fp.BYTES,
       publicKeyHasPrefix: true,
       // Raw compact `(r || s)` signature width; DER and recovered signatures use
       // different lengths outside this helper.
-      signature: 2 * Fn3.BYTES
+      signature: 2 * Fn4.BYTES
     };
   }
   function ecdh(Point4, ecdhOpts = {}) {
-    const { Fn: Fn3 } = Point4;
+    const { Fn: Fn4 } = Point4;
     const randomBytes_ = ecdhOpts.randomBytes === void 0 ? randomBytes2 : ecdhOpts.randomBytes;
-    const lengths = Object.assign(getWLengths(Point4.Fp, Fn3), {
-      seed: Math.max(getMinHashLength(Fn3.ORDER), 16)
+    const lengths = Object.assign(getWLengths(Point4.Fp, Fn4), {
+      seed: Math.max(getMinHashLength(Fn4.ORDER), 16)
     });
     function isValidSecretKey(secretKey) {
       try {
-        const num2 = Fn3.fromBytes(secretKey);
-        return Fn3.isValidNot0(num2);
+        const num2 = Fn4.fromBytes(secretKey);
+        return Fn4.isValidNot0(num2);
       } catch (error) {
         return false;
       }
@@ -2424,14 +2424,14 @@
     }
     function randomSecretKey(seed) {
       seed = seed === void 0 ? randomBytes_(lengths.seed) : seed;
-      return mapHashToField(abytes2(seed, lengths.seed, "seed"), Fn3.ORDER);
+      return mapHashToField(abytes2(seed, lengths.seed, "seed"), Fn4.ORDER);
     }
     function getPublicKey(secretKey, isCompressed = true) {
-      return Point4.BASE.multiply(Fn3.fromBytes(secretKey)).toBytes(isCompressed);
+      return Point4.BASE.multiply(Fn4.fromBytes(secretKey)).toBytes(isCompressed);
     }
     function isProbPub(item) {
       const { secretKey, publicKey, publicKeyUncompressed } = lengths;
-      const allowedLengths = Fn3._lengths;
+      const allowedLengths = Fn4._lengths;
       if (!isBytes2(item))
         return void 0;
       const l = abytes2(item, void 0, "key").length;
@@ -2446,7 +2446,7 @@
         throw new Error("first arg must be private key");
       if (isProbPub(publicKeyB) === false)
         throw new Error("second arg must be public key");
-      const s = Fn3.fromBytes(secretKeyA);
+      const s = Fn4.fromBytes(secretKeyA);
       const b = Point4.fromBytes(publicKeyB);
       return b.multiply(s).toBytes(isCompressed);
     }
@@ -2473,8 +2473,8 @@
     ecdsaOpts = Object.assign({}, ecdsaOpts);
     const randomBytes3 = ecdsaOpts.randomBytes === void 0 ? randomBytes2 : ecdsaOpts.randomBytes;
     const hmac2 = ecdsaOpts.hmac === void 0 ? (key, msg) => hmac(hash_, key, msg) : ecdsaOpts.hmac;
-    const { Fp, Fn: Fn3 } = Point4;
-    const { ORDER: CURVE_ORDER2, BITS: fnBits } = Fn3;
+    const { Fp, Fn: Fn4 } = Point4;
+    const { ORDER: CURVE_ORDER2, BITS: fnBits } = Fn4;
     const { keygen, getPublicKey, getSharedSecret, utils: utils2, lengths } = ecdh(Point4, ecdsaOpts);
     const defaultSigOpts = {
       prehash: true,
@@ -2488,7 +2488,7 @@
       return number > HALF;
     }
     function validateRS(title, num2) {
-      if (!Fn3.isValidNot0(num2))
+      if (!Fn4.isValidNot0(num2))
         throw new Error(`invalid signature ${title}: out of range 1..Point.Fn.ORDER`);
       return num2;
     }
@@ -2532,7 +2532,7 @@
         const L = lengths.signature / 2;
         const r = bytes.subarray(0, L);
         const s = bytes.subarray(L, L * 2);
-        return new Signature(Fn3.fromBytes(r), Fn3.fromBytes(s), recid);
+        return new Signature(Fn4.fromBytes(r), Fn4.fromBytes(s), recid);
       }
       static fromHex(hex2, format) {
         return this.fromBytes(hexToBytes2(hex2), format);
@@ -2556,10 +2556,10 @@
           throw new Error("invalid recovery id: sig.r+curve.n != R.x");
         const x = Fp.toBytes(radj);
         const R = Point4.fromBytes(concatBytes2(pprefix((recovery & 1) === 0), x));
-        const ir = Fn3.inv(radj);
+        const ir = Fn4.inv(radj);
         const h = bits2int_modN(abytes2(messageHash, void 0, "msgHash"));
-        const u1 = Fn3.create(-h * ir);
-        const u2 = Fn3.create(s * ir);
+        const u1 = Fn4.create(-h * ir);
+        const u2 = Fn4.create(s * ir);
         const Q = Point4.BASE.multiplyUnsafe(u1).add(R.multiplyUnsafe(u2));
         if (Q.is0())
           throw new Error("invalid recovery: point at infinify");
@@ -2575,8 +2575,8 @@
         if (format === "der")
           return hexToBytes2(DER.hexFromSig(this));
         const { r, s } = this;
-        const rb = Fn3.toBytes(r);
-        const sb = Fn3.toBytes(s);
+        const rb = Fn4.toBytes(r);
+        const sb = Fn4.toBytes(s);
         if (format === "recovered") {
           assertRecoverableCurve();
           return concatBytes2(Uint8Array.of(this.assertRecovery()), rb, sb);
@@ -2597,12 +2597,12 @@
       return delta > 0 ? num2 >> BigInt(delta) : num2;
     } : ecdsaOpts.bits2int;
     const bits2int_modN = ecdsaOpts.bits2int_modN === void 0 ? function bits2int_modN_def(bytes) {
-      return Fn3.create(bits2int(bytes));
+      return Fn4.create(bits2int(bytes));
     } : ecdsaOpts.bits2int_modN;
     const ORDER_MASK = bitMask(fnBits);
     function int2octets(num2) {
       aInRange("num < 2^" + fnBits, num2, _0n4, ORDER_MASK);
-      return Fn3.toBytes(num2);
+      return Fn4.toBytes(num2);
     }
     function validateMsgAndHash(message, prehash) {
       abytes2(message, void 0, "message");
@@ -2612,8 +2612,8 @@
       const { lowS, prehash, extraEntropy } = validateSigOpts(opts, defaultSigOpts);
       message = validateMsgAndHash(message, prehash);
       const h1int = bits2int_modN(message);
-      const d = Fn3.fromBytes(secretKey);
-      if (!Fn3.isValidNot0(d))
+      const d = Fn4.fromBytes(secretKey);
+      if (!Fn4.isValidNot0(d))
         throw new Error("invalid private key");
       const seedArgs = [int2octets(d), int2octets(h1int)];
       if (extraEntropy != null && extraEntropy !== false) {
@@ -2624,20 +2624,20 @@
       const m = h1int;
       function k2sig(kBytes) {
         const k = bits2int(kBytes);
-        if (!Fn3.isValidNot0(k))
+        if (!Fn4.isValidNot0(k))
           return;
-        const ik = Fn3.inv(k);
+        const ik = Fn4.inv(k);
         const q = Point4.BASE.multiply(k).toAffine();
-        const r = Fn3.create(q.x);
+        const r = Fn4.create(q.x);
         if (r === _0n4)
           return;
-        const s = Fn3.create(ik * Fn3.create(m + r * d));
+        const s = Fn4.create(ik * Fn4.create(m + r * d));
         if (s === _0n4)
           return;
         let recovery = (q.x === r ? 0 : 2) | Number(q.y & _1n4);
         let normS = s;
         if (lowS && isBiggerThanHalfOrder(s)) {
-          normS = Fn3.neg(s);
+          normS = Fn4.neg(s);
           recovery ^= 1;
         }
         return new Signature(r, normS, hasLargeRecoveryLifts ? void 0 : recovery);
@@ -2646,7 +2646,7 @@
     }
     function sign(message, secretKey, opts = {}) {
       const { seed, k2sig } = prepSig(message, secretKey, opts);
-      const drbg = createHmacDrbg(hash_.outputLen, Fn3.BYTES, hmac2);
+      const drbg = createHmacDrbg(hash_.outputLen, Fn4.BYTES, hmac2);
       const sig = drbg(seed, k2sig);
       return sig.toBytes(opts.format);
     }
@@ -2666,13 +2666,13 @@
           return false;
         const { r, s } = sig;
         const h = bits2int_modN(message);
-        const is = Fn3.inv(s);
-        const u1 = Fn3.create(h * is);
-        const u2 = Fn3.create(r * is);
+        const is = Fn4.inv(s);
+        const u1 = Fn4.create(h * is);
+        const u2 = Fn4.create(r * is);
         const R = Point4.BASE.multiplyUnsafe(u1).add(P.multiplyUnsafe(u2));
         if (R.is0())
           return false;
-        const v = Fn3.create(R.x);
+        const v = Fn4.create(R.x);
         return v === r;
       } catch (e) {
         return false;
@@ -2758,10 +2758,10 @@
   var pointToBytes = (point) => point.toBytes(true).slice(1);
   var hasEven = (y) => y % _2n3 === _0n5;
   function schnorrGetExtPubKey(priv) {
-    const { Fn: Fn3, BASE } = Pointk1;
-    const d_ = Fn3.fromBytes(priv);
+    const { Fn: Fn4, BASE } = Pointk1;
+    const d_ = Fn4.fromBytes(priv);
     const p = BASE.multiply(d_);
-    const scalar = hasEven(p.y) ? d_ : Fn3.neg(d_);
+    const scalar = hasEven(p.y) ? d_ : Fn4.neg(d_);
     return { scalar, bytes: pointToBytes(p) };
   }
   function lift_x(x) {
@@ -2785,28 +2785,28 @@
     return schnorrGetExtPubKey(secretKey).bytes;
   }
   function schnorrSign(message, secretKey, auxRand = randomBytes(32)) {
-    const { Fn: Fn3, BASE } = Pointk1;
+    const { Fn: Fn4, BASE } = Pointk1;
     const m = abytes2(message, void 0, "message");
     const { bytes: px, scalar: d } = schnorrGetExtPubKey(secretKey);
     const a = abytes2(auxRand, 32, "auxRand");
-    const t = Fn3.toBytes(d ^ num(taggedHash("BIP0340/aux", a)));
+    const t = Fn4.toBytes(d ^ num(taggedHash("BIP0340/aux", a)));
     const rand = taggedHash("BIP0340/nonce", t, px, m);
-    const k_ = Fn3.create(num(rand));
+    const k_ = Fn4.create(num(rand));
     if (k_ === 0n)
       throw new Error("sign failed: k is zero");
     const p = BASE.multiply(k_);
-    const k = hasEven(p.y) ? k_ : Fn3.neg(k_);
+    const k = hasEven(p.y) ? k_ : Fn4.neg(k_);
     const rx = pointToBytes(p);
     const e = challenge(rx, px, m);
     const sig = new Uint8Array(64);
     sig.set(rx, 0);
-    sig.set(Fn3.toBytes(Fn3.create(k + e * d)), 32);
+    sig.set(Fn4.toBytes(Fn4.create(k + e * d)), 32);
     if (!schnorrVerify(sig, m, px))
       throw new Error("sign: Invalid signature produced");
     return sig;
   }
   function schnorrVerify(signature, message, publicKey) {
-    const { Fp, Fn: Fn3, BASE } = Pointk1;
+    const { Fp, Fn: Fn4, BASE } = Pointk1;
     const sig = abytes2(signature, 64, "signature");
     const m = abytes2(message, void 0, "message");
     const pub = abytes2(publicKey, 32, "publicKey");
@@ -2816,10 +2816,10 @@
       if (!Fp.isValidNot0(r))
         return false;
       const s = num(sig.subarray(32, 64));
-      if (!Fn3.isValidNot0(s))
+      if (!Fn4.isValidNot0(s))
         return false;
-      const e = challenge(Fn3.toBytes(r), pointToBytes(P), m);
-      const R = BASE.multiplyUnsafe(s).add(P.multiplyUnsafe(Fn3.neg(e)));
+      const e = challenge(Fn4.toBytes(r), pointToBytes(P), m);
+      const R = BASE.multiplyUnsafe(s).add(P.multiplyUnsafe(Fn4.neg(e)));
       const { x, y } = R.toAffine();
       if (R.is0() || !hasEven(y) || x !== r)
         return false;
@@ -3588,6 +3588,112 @@
   }
   var bech32 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ genBech32("bech32"));
   var bech32m = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ genBech32("bech32m"));
+  var _isWellFormedShim = (str) => {
+    try {
+      return encodeURI(str) !== null;
+    } catch {
+      return false;
+    }
+  };
+  var _isWellFormed = /* @__PURE__ */ (() => (
+    // Pick the native check once so utf8.decode doesn't re-probe String.prototype on every call.
+    typeof "".isWellFormed === "function" ? (str) => str.isWellFormed() : _isWellFormedShim
+  ))();
+  var utf8Fallback = /* @__PURE__ */ Object.freeze({
+    encode(data) {
+      abytes3(data);
+      let res = "";
+      for (let i = 0; i < data.length; ) {
+        const a = data[i++];
+        if (a < 128) {
+          res += String.fromCharCode(a);
+          continue;
+        }
+        if (a < 194 || i >= data.length)
+          throw new TypeError(`invalid utf8 at byte ${i - 1}`);
+        const b = data[i++];
+        if ((b & 192) !== 128)
+          throw new TypeError(`invalid utf8 at byte ${i - 1}`);
+        let cp = (a & 31) << 6 | b & 63;
+        if (a >= 224) {
+          if (i >= data.length)
+            throw new TypeError(`invalid utf8 at byte ${i - 1}`);
+          const c = data[i++];
+          if ((c & 192) !== 128 || a === 224 && b < 160 || a === 237 && b >= 160)
+            throw new TypeError(`invalid utf8 at byte ${i - 1}`);
+          cp = (a & 15) << 12 | (b & 63) << 6 | c & 63;
+          if (a >= 240) {
+            if (i >= data.length)
+              throw new TypeError(`invalid utf8 at byte ${i - 1}`);
+            const d = data[i++];
+            if (a > 244 || (d & 192) !== 128 || a === 240 && b < 144 || a === 244 && b >= 144)
+              throw new TypeError(`invalid utf8 at byte ${i - 1}`);
+            cp = (a & 7) << 18 | (b & 63) << 12 | (c & 63) << 6 | d & 63;
+          }
+        }
+        if (cp < 65536)
+          res += String.fromCharCode(cp);
+        else {
+          cp -= 65536;
+          res += String.fromCharCode((cp >> 10) + 55296, (cp & 1023) + 56320);
+        }
+      }
+      return res;
+    },
+    decode(str) {
+      astr("utf8", str);
+      if (!_isWellFormed(str))
+        throw new TypeError("utf8 expected well-formed string");
+      const res = new Uint8Array(str.length * 3);
+      let pos = 0;
+      for (let i = 0; i < str.length; i++) {
+        let c = str.charCodeAt(i);
+        if (c < 128) {
+          res[pos++] = c;
+          continue;
+        }
+        if (c >= 55296 && c <= 57343) {
+          const d = str.charCodeAt(++i);
+          c = 65536 + (c - 55296 << 10) + d - 56320;
+        }
+        if (c >= 65536) {
+          res[pos++] = c >> 18 | 240;
+          res[pos++] = c >> 12 & 63 | 128;
+        } else if (c >= 2048)
+          res[pos++] = c >> 12 | 224;
+        else
+          res[pos++] = c >> 6 | 192;
+        if (c >= 2048)
+          res[pos++] = c >> 6 & 63 | 128;
+        res[pos++] = c & 63 | 128;
+      }
+      return res.subarray(0, pos);
+    }
+  });
+  var utf8 = /* @__PURE__ */ (() => {
+    let _utf8Encoder;
+    let _utf8Decoder;
+    const utf8Builtin = {
+      // ignoreBOM preserves an explicit leading U+FEFF;
+      // fatal rejects invalid UTF-8 bytes instead of replacing them.
+      encode(data) {
+        abytes3(data);
+        return (_utf8Decoder || (_utf8Decoder = new TextDecoder("utf-8", { ignoreBOM: true, fatal: true }))).decode(data);
+      },
+      decode(str) {
+        astr("utf8", str);
+        if (!_isWellFormed(str))
+          throw new TypeError("utf8 expected well-formed string");
+        return (_utf8Encoder || (_utf8Encoder = new TextEncoder())).encode(str);
+      }
+    };
+    return Object.freeze({
+      // Select each direction once at module init, since
+      // TextEncoder and TextDecoder can exist independently.
+      encode: typeof TextDecoder === "function" ? utf8Builtin.encode : utf8Fallback.encode,
+      decode: typeof TextEncoder === "function" ? utf8Builtin.decode : utf8Fallback.decode
+    });
+  })();
   var hasHexBuiltin2 = /* @__PURE__ */ (() => (
     // Require both directions before enabling the native hex path so encode/decode stay symmetric.
     typeof Uint8Array.from([]).toHex === "function" && typeof Uint8Array.fromHex === "function"
@@ -3856,6 +3962,7 @@
 
   // node_modules/micro-packed/index.js
   var EMPTY = /* @__PURE__ */ Uint8Array.of();
+  var NULL = /* @__PURE__ */ Uint8Array.of(0);
   var restrictedKeys = /* @__PURE__ */ new Set(["__proto__", "constructor", "prototype"]);
   var validateFieldName = (name, label) => {
     if (typeof name !== "string")
@@ -3903,6 +4010,13 @@
     };
   }
   var findBytes = (needle, data, pos = 0) => createFindBytes(needle)(data, pos);
+  function equal(a, b) {
+    const aBytes = isBytes4(a);
+    const bBytes = isBytes4(b);
+    if (aBytes || bBytes)
+      return aBytes && bBytes && equalBytes2(a, b);
+    return a === b;
+  }
   function isBytes4(a) {
     return a instanceof Uint8Array || ArrayBuffer.isView(a) && a.constructor.name === "Uint8Array" && "BYTES_PER_ELEMENT" in a && a.BYTES_PER_ELEMENT === 1;
   }
@@ -3926,7 +4040,9 @@
   var _0n7 = /* @__PURE__ */ BigInt(0);
   var _1n6 = /* @__PURE__ */ BigInt(1);
   var _2n5 = /* @__PURE__ */ BigInt(2);
+  var _8n2 = /* @__PURE__ */ BigInt(8);
   var _10n = /* @__PURE__ */ BigInt(10);
+  var _255n = /* @__PURE__ */ BigInt(255);
   function isPlainObject(obj) {
     return Object.prototype.toString.call(obj) === "[object Object]";
   }
@@ -4669,6 +4785,78 @@
     return { encode: (to) => coder.decode(to), decode: (from) => coder.encode(from) };
   };
   var coders = /* @__PURE__ */ Object.freeze({ dict, numberBigint, tsEnum, decimal, match, reverse });
+  var bigint = (size, le = false, signed = false, sized = true) => {
+    if (!isNum(size) || size <= 0)
+      throw new Error(`bigint/size: wrong value ${size}`);
+    if (typeof le !== "boolean")
+      throw new Error(`bigint/le: expected boolean, got ${typeof le}`);
+    if (typeof signed !== "boolean")
+      throw new Error(`bigint/signed: expected boolean, got ${typeof signed}`);
+    if (typeof sized !== "boolean")
+      throw new Error(`bigint/sized: expected boolean, got ${typeof sized}`);
+    const bLen = BigInt(size);
+    const signBit = _2n5 ** (_8n2 * bLen - _1n6);
+    return wrap({
+      size: sized ? size : void 0,
+      encodeStream: (w, value) => {
+        const zero = value === _0n7;
+        if (signed && value < 0)
+          value = value | signBit;
+        const b = [];
+        for (let i = 0; i < size; i++) {
+          b.push(Number(value & _255n));
+          value >>= _8n2;
+        }
+        let res = new Uint8Array(b).reverse();
+        if (!sized) {
+          let pos = 0;
+          if (signed) {
+            for (; pos < res.length - 1; pos++) {
+              const next = res[pos + 1];
+              if (res[pos] === 0 && (next & 128) === 0)
+                continue;
+              if (res[pos] === 255 && (next & 128) !== 0)
+                continue;
+              break;
+            }
+            res = zero ? res.subarray(res.length) : res.subarray(pos);
+          } else {
+            for (; pos < res.length; pos++)
+              if (res[pos] !== 0)
+                break;
+            res = res.subarray(pos);
+          }
+        }
+        w.bytes(le ? res.reverse() : res);
+      },
+      decodeStream: (r) => {
+        const value = r.bytes(sized ? size : Math.min(size, r.leftBytes));
+        const b = le ? value : swapEndianness(value);
+        let res = _0n7;
+        for (let i = 0; i < b.length; i++)
+          res |= BigInt(b[i]) << _8n2 * BigInt(i);
+        const sBit = sized || !value.length ? signBit : _2n5 ** (_8n2 * BigInt(value.length) - _1n6);
+        if (signed && res & sBit)
+          res = (res ^ sBit) - sBit;
+        return res;
+      },
+      validate: (value) => {
+        if (typeof value !== "bigint")
+          throw new Error(`bigint: invalid value: ${value}`);
+        checkBounds(value, _8n2 * bLen, !!signed);
+        return value;
+      }
+    });
+  };
+  var U256BE = /* @__PURE__ */ Object.freeze(
+    /* @__PURE__ */ bigint(32, false)
+  );
+  var U64LE = /* @__PURE__ */ Object.freeze(
+    /* @__PURE__ */ bigint(8, true)
+  );
+  var I64LE = /* @__PURE__ */ Object.freeze(
+    /* @__PURE__ */ bigint(8, true, true)
+  );
   var view = (len, opts) => wrap({
     size: len,
     encodeStream: (w, value) => w.writeView(len, (view2) => opts.write(view2, value)),
@@ -4709,6 +4897,18 @@
     /* @__PURE__ */ intView(4, false, {
       read: (view2, pos) => view2.getUint32(pos, true),
       write: (view2, value) => view2.setUint32(0, value, true)
+    })
+  );
+  var U32BE = /* @__PURE__ */ Object.freeze(
+    /* @__PURE__ */ intView(4, false, {
+      read: (view2, pos) => view2.getUint32(pos, false),
+      write: (view2, value) => view2.setUint32(0, value, false)
+    })
+  );
+  var I32LE = /* @__PURE__ */ Object.freeze(
+    /* @__PURE__ */ intView(4, true, {
+      read: (view2, pos) => view2.getInt32(pos, true),
+      write: (view2, value) => view2.setInt32(0, value, true)
     })
   );
   var U16LE = /* @__PURE__ */ Object.freeze(
@@ -4764,6 +4964,16 @@
       }
     });
   };
+  function prefix(len, inner) {
+    if (!isCoder(inner))
+      throw new Error(`prefix: invalid inner value ${inner}`);
+    return apply(createBytes(len), reverse(inner));
+  }
+  var string = (len, le = false) => validate(apply(createBytes(len, le), utf8), (value) => {
+    if (typeof value !== "string")
+      throw new Error(`expected string, got ${typeof value}`);
+    return value;
+  });
   function apply(inner, base) {
     if (!isCoder(inner))
       throw new TypeError(`apply: invalid inner value ${inner}`);
@@ -4787,6 +4997,97 @@
         } catch (e) {
           throw r.err("" + e);
         }
+      }
+    });
+  }
+  var flag = (flagValue, xor = false) => {
+    if (!isBytes4(flagValue))
+      throw new TypeError(`flag/flagValue: expected Uint8Array, got ${typeof flagValue}`);
+    if (flagValue.length === 0)
+      throw new Error("flag/flagValue: empty marker");
+    if (typeof xor !== "boolean")
+      throw new TypeError(`flag/xor: expected boolean, got ${typeof xor}`);
+    return wrap({
+      // Marker flags encode one state as empty, so encoded length depends on the boolean value.
+      size: void 0,
+      encodeStream: (w, value) => {
+        if (!!value !== xor)
+          w.bytes(flagValue);
+      },
+      decodeStream: (r) => {
+        let hasFlag = r.leftBytes >= flagValue.length;
+        if (hasFlag) {
+          hasFlag = equalBytes2(r.bytes(flagValue.length, true), flagValue);
+          if (hasFlag)
+            r.bytes(flagValue.length);
+        }
+        return hasFlag !== xor;
+      },
+      validate: (value) => {
+        if (value !== void 0 && typeof value !== "boolean")
+          throw new Error(`flag: expected boolean value or undefined, got ${typeof value}`);
+        return value;
+      }
+    });
+  };
+  function flagged(path, inner, def2) {
+    if (typeof path !== "string" && !isCoder(path))
+      throw new TypeError(`flagged: wrong path=${path}`);
+    if (!isCoder(inner))
+      throw new TypeError(`flagged: invalid inner value ${inner}`);
+    const hasDef = def2 !== void 0;
+    return wrap({
+      encodeStream: (w, value) => {
+        if (typeof path === "string") {
+          if (Path.resolve(w.stack, path))
+            inner.encodeStream(w, value);
+          else if (hasDef)
+            inner.encodeStream(w, def2);
+        } else {
+          const present = value !== void 0;
+          path.encodeStream(w, present);
+          if (present)
+            inner.encodeStream(w, value);
+          else if (hasDef)
+            inner.encodeStream(w, def2);
+        }
+      },
+      decodeStream: (r) => {
+        let hasFlag = false;
+        if (typeof path === "string")
+          hasFlag = !!Path.resolve(r.stack, path);
+        else
+          hasFlag = path.decodeStream(r);
+        if (hasFlag)
+          return inner.decodeStream(r);
+        else if (hasDef)
+          inner.decodeStream(r);
+        return;
+      }
+    });
+  }
+  function magic(inner, constant, check = true) {
+    if (!isCoder(inner))
+      throw new TypeError(`magic: invalid inner value ${inner}`);
+    if (typeof check !== "boolean")
+      throw new TypeError(`magic: expected boolean, got ${typeof check}`);
+    return wrap({
+      size: inner.size,
+      encodeStream: (w, _value) => inner.encodeStream(w, constant),
+      decodeStream: (r) => {
+        const value = inner.decodeStream(r);
+        const valueObj = value !== null && typeof value === "object" && !isBytes4(value);
+        const constantObj = constant !== null && typeof constant === "object" && !isBytes4(constant);
+        const canCompare = !valueObj || !constantObj;
+        if (check && canCompare && !equal(value, constant)) {
+          throw r.err(`magic: invalid value: ${value} !== ${constant}`);
+        }
+        return;
+      },
+      validate: (value) => {
+        if (value !== void 0)
+          throw new Error(`magic: wrong value=${typeof value}`);
+        return value;
       }
     });
   }
@@ -4913,12 +5214,34 @@
 
   // node_modules/@scure/btc-signer/utils.js
   var Point2 = /* @__PURE__ */ (() => secp256k1.Point)();
+  var Fn2 = /* @__PURE__ */ (() => Point2.Fn)();
   var CURVE_ORDER = /* @__PURE__ */ (() => Point2.Fn.ORDER)();
   var hasEven2 = (y) => y % 2n === 0n;
   var isBytes5 = /* @__PURE__ */ (() => utils.isBytes)();
   var concatBytes4 = /* @__PURE__ */ (() => utils.concatBytes)();
   var equalBytes3 = /* @__PURE__ */ (() => utils.equalBytes)();
   var sha2562 = /* @__PURE__ */ (() => sha256)();
+  var hash1602 = (msg) => ripemd160(sha2562(msg));
+  var sha256x2 = (...msgs) => sha2562(sha2562(concatBytes4(...msgs)));
+  var pubSchnorr = (priv) => schnorr.getPublicKey(priv);
+  var pubECDSA = (privateKey, isCompressed) => secp256k1.getPublicKey(privateKey, isCompressed);
+  var hasLowR = (sig) => sig.r < CURVE_ORDER / 2n;
+  function signECDSA(hash, privateKey, lowR = false) {
+    abytes2(hash, 32, "hash");
+    let sig = secp256k1.Signature.fromBytes(secp256k1.sign(hash, privateKey, { prehash: false }));
+    if (lowR && !hasLowR(sig)) {
+      const extraEntropy = new Uint8Array(32);
+      let counter = 0;
+      while (!hasLowR(sig)) {
+        extraEntropy.set(U32LE.encode(counter++));
+        sig = secp256k1.Signature.fromBytes(secp256k1.sign(hash, privateKey, { prehash: false, extraEntropy }));
+        if (counter > 4294967295)
+          throw new Error("lowR counter overflow: report the error");
+      }
+    }
+    return sig.toBytes("der");
+  }
+  var signSchnorr = (message, secretKey, auxRand) => schnorr.sign(message, secretKey, auxRand);
   var tagSchnorr = (tag, ...messages) => schnorr.utils.taggedHash(tag, ...messages);
   var PubT = /* @__PURE__ */ (() => Object.freeze({
     ecdsa: 0,
@@ -4947,6 +5270,16 @@
     if (tn >= CURVE_ORDER)
       throw new Error("tweak higher than curve order");
     return tn;
+  }
+  function taprootTweakPrivKey(privKey, merkleRoot = Uint8Array.of()) {
+    const u = schnorr.utils;
+    abytes2(privKey, 32, "privKey");
+    const seckey0 = bytesToNumberBE(privKey);
+    const P = Point2.BASE.multiply(seckey0);
+    const seckey = hasEven2(P.y) ? seckey0 : Fn2.neg(seckey0);
+    const xP = u.pointToBytes(P);
+    const t = tapTweak(xP, merkleRoot);
+    return numberToBytesBE(Fn2.add(seckey, t), 32);
   }
   function taprootTweakPubkey(pubKey, h) {
     const u = schnorr.utils;
@@ -5281,10 +5614,84 @@
       return num2;
     }
   })))();
+  var CompactSizeLen = /* @__PURE__ */ (() => Object.freeze(apply(CompactSize, coders.numberBigint)))();
   var _VarBytes = /* @__PURE__ */ (() => Object.freeze(createBytes(CompactSize)))();
   var VarBytes = _VarBytes;
+  var _RawWitness = /* @__PURE__ */ (() => Object.freeze(array(CompactSizeLen, _VarBytes)))();
+  var RawWitness = _RawWitness;
+  var BTCArray = (t) => array(CompactSize, t);
+  var RawInput = /* @__PURE__ */ (() => Object.freeze(struct({
+    txid: createBytes(32, true),
+    // hash(prev_tx),
+    index: U32LE,
+    // output number of previous tx
+    finalScriptSig: _VarBytes,
+    // btc merges input and output script, executes it. If ok = tx passes
+    sequence: U32LE
+    // ?
+  })))();
+  var RawOutput = /* @__PURE__ */ (() => Object.freeze(struct({ amount: U64LE, script: _VarBytes })))();
+  var _RawTx = /* @__PURE__ */ (() => struct({
+    version: I32LE,
+    segwitFlag: flag(new Uint8Array([0, 1])),
+    inputs: BTCArray(RawInput),
+    outputs: BTCArray(RawOutput),
+    // BIP144 does not encode a witness-count field; one RawWitness entry is
+    // implied for each txin and follows the same order as inputs.
+    witnesses: flagged("segwitFlag", array("inputs/length", _RawWitness)),
+    // < 500000000	Block number at which this transaction is unlocked
+    // >= 500000000	UNIX timestamp at which this transaction is unlocked
+    // Handled as part of PSBTv2
+    lockTime: U32LE
+  }))();
+  function validateRawTx(tx) {
+    if (tx.segwitFlag && tx.witnesses && tx.witnesses.every((w) => !w.length))
+      throw new Error("Segwit flag with only empty witness fields");
+    return tx;
+  }
+  var RawTx = /* @__PURE__ */ (() => Object.freeze(validate(_RawTx, validateRawTx)))();
+  var RawOldTx = /* @__PURE__ */ (() => Object.freeze(struct({
+    version: I32LE,
+    inputs: BTCArray(RawInput),
+    outputs: BTCArray(RawOutput),
+    lockTime: U32LE
+  })))();
 
   // node_modules/@scure/btc-signer/psbt.js
+  var PubKeyECDSA = /* @__PURE__ */ (() => validate(createBytes(null), (pub) => validatePubkey(pub, PubT.ecdsa)))();
+  var PubKeyECDSACompressed = /* @__PURE__ */ (() => validate(createBytes(33), (pub) => validatePubkey(pub, PubT.ecdsa)))();
+  var PubKeySchnorr = /* @__PURE__ */ (() => validate(createBytes(32), (pub) => validatePubkey(pub, PubT.schnorr)))();
+  var SignatureSchnorr = /* @__PURE__ */ (() => validate(createBytes(null), (sig) => {
+    if (sig.length !== 64 && sig.length !== 65)
+      throw new Error("Schnorr signature should be 64 or 65 bytes long");
+    return sig;
+  }))();
+  var RawWitnessWire = RawWitness;
+  var BIP32Der = /* @__PURE__ */ (() => struct({
+    fingerprint: U32BE,
+    path: array(null, U32LE)
+  }))();
+  var TaprootBIP32Der = /* @__PURE__ */ (() => struct({
+    hashes: array(CompactSizeLen, createBytes(32)),
+    der: BIP32Der
+  }))();
+  var GlobalXPUB = /* @__PURE__ */ (() => validate(struct({
+    version: U32BE,
+    depth: U8,
+    parentFingerprint: U32BE,
+    childNumber: U32BE,
+    chainCode: createBytes(32),
+    // BIP32 serialization stores the public key as the final 33-byte `ser_P(K)` field and says
+    // importing an extended public key must verify that point data corresponds to the curve.
+    publicKey: PubKeyECDSACompressed
+  }), (xpub) => {
+    if (xpub.depth === 0 && xpub.parentFingerprint !== 0)
+      throw new Error("GlobalXPUB: depth=0 requires parentFingerprint=0");
+    if (xpub.depth === 0 && xpub.childNumber !== 0)
+      throw new Error("GlobalXPUB: depth=0 requires childNumber=0");
+    return xpub;
+  }))();
+  var tapScriptSigKey = /* @__PURE__ */ (() => struct({ pubKey: PubKeySchnorr, leafHash: createBytes(32) }))();
   var _TaprootControlBlock = /* @__PURE__ */ (() => struct({
     version: U8,
     // With parity :(
@@ -5296,6 +5703,442 @@
       throw new Error("TaprootControlBlock: merklePath should be of length 0..128 (inclusive)");
     return cb;
   })))();
+  var tapTree = /* @__PURE__ */ (() => validate(array(null, struct({
+    depth: U8,
+    version: U8,
+    script: VarBytes
+  })), (tree) => {
+    if (tree.length < 1)
+      throw new Error("tapTree: expected at least one tuple");
+    let path = Array(tree[0].depth).fill(0);
+    let maxDepth = tree[0].depth;
+    for (let i = 1; i < tree.length; i++) {
+      const { depth } = tree[i];
+      if (depth > maxDepth)
+        maxDepth = depth;
+      let j = path.length - 1;
+      while (j >= 0 && path[j] === 1)
+        j--;
+      if (j < 0)
+        throw new Error("tapTree: tuples must be in DFS order");
+      const next = path.slice(0, j);
+      next.push(1);
+      if (depth < next.length)
+        throw new Error("tapTree: tuples must be in DFS order");
+      while (next.length < depth)
+        next.push(0);
+      path = next;
+    }
+    let leaves = 0n;
+    for (let i = 0; i < tree.length; i++)
+      leaves += 1n << BigInt(maxDepth - tree[i].depth);
+    if (leaves !== 1n << BigInt(maxDepth))
+      throw new Error("tapTree: tuples must describe a complete binary tree");
+    return tree;
+  }))();
+  var BytesInf = /* @__PURE__ */ createBytes(null);
+  var Bytes20 = /* @__PURE__ */ createBytes(20);
+  var Bytes32 = /* @__PURE__ */ createBytes(32);
+  var PSBTInfo = (type, kc, vc, reqInc, allowInc, silentIgnore) => /* @__PURE__ */ Object.freeze([
+    type,
+    kc && typeof kc === "object" ? Object.freeze(kc) : kc,
+    vc && typeof vc === "object" ? Object.freeze(vc) : vc,
+    Object.freeze([...reqInc]),
+    Object.freeze([...allowInc]),
+    silentIgnore
+  ]);
+  var PSBTGlobal = /* @__PURE__ */ (() => Object.freeze({
+    unsignedTx: PSBTInfo(0, false, RawOldTx, [0], [0], false),
+    // BIP174 also requires the serialized xpub depth to match the number of path elements in the
+    // paired derivation value, so callers still need that cross-field check above this raw table.
+    xpub: PSBTInfo(1, GlobalXPUB, BIP32Der, [], [0, 2], false),
+    txVersion: PSBTInfo(2, false, U32LE, [2], [2], false),
+    fallbackLocktime: PSBTInfo(3, false, U32LE, [], [2], false),
+    inputCount: PSBTInfo(4, false, CompactSizeLen, [2], [2], false),
+    outputCount: PSBTInfo(5, false, CompactSizeLen, [2], [2], false),
+    // TODO: bitfield
+    txModifiable: PSBTInfo(6, false, U8, [], [2], false),
+    version: PSBTInfo(251, false, U32LE, [], [0, 2], false),
+    proprietary: PSBTInfo(252, BytesInf, BytesInf, [], [0, 2], false)
+  }))();
+  var PSBTInput = /* @__PURE__ */ (() => Object.freeze({
+    nonWitnessUtxo: PSBTInfo(0, false, RawTx, [], [0, 2], false),
+    witnessUtxo: PSBTInfo(1, false, RawOutput, [], [0, 2], false),
+    partialSig: PSBTInfo(2, PubKeyECDSA, BytesInf, [], [0, 2], false),
+    sighashType: PSBTInfo(3, false, U32LE, [], [0, 2], false),
+    redeemScript: PSBTInfo(4, false, BytesInf, [], [0, 2], false),
+    witnessScript: PSBTInfo(5, false, BytesInf, [], [0, 2], false),
+    bip32Derivation: PSBTInfo(6, PubKeyECDSA, BIP32Der, [], [0, 2], false),
+    finalScriptSig: PSBTInfo(7, false, BytesInf, [], [0, 2], false),
+    finalScriptWitness: PSBTInfo(8, false, RawWitnessWire, [], [0, 2], false),
+    porCommitment: PSBTInfo(9, false, BytesInf, [], [0, 2], false),
+    ripemd160: PSBTInfo(10, Bytes20, BytesInf, [], [0, 2], false),
+    sha256: PSBTInfo(11, Bytes32, BytesInf, [], [0, 2], false),
+    hash160: PSBTInfo(12, Bytes20, BytesInf, [], [0, 2], false),
+    hash256: PSBTInfo(13, Bytes32, BytesInf, [], [0, 2], false),
+    // BIP174/BIP370 serialize PREVIOUS_TXID in standard byte order, while the rest of this repo
+    // historically keeps TransactionInput.txid in display-order bytes matching `Transaction.id`.
+    // Reverse at this PSBTv2 boundary so internal txid semantics stay aligned with the raw-tx path.
+    txid: PSBTInfo(14, false, createBytes(32, true), [2], [2], true),
+    index: PSBTInfo(15, false, U32LE, [2], [2], true),
+    sequence: PSBTInfo(16, false, U32LE, [], [2], true),
+    requiredTimeLocktime: PSBTInfo(17, false, U32LE, [], [2], false),
+    requiredHeightLocktime: PSBTInfo(18, false, U32LE, [], [2], false),
+    tapKeySig: PSBTInfo(19, false, SignatureSchnorr, [], [0, 2], false),
+    tapScriptSig: PSBTInfo(20, tapScriptSigKey, SignatureSchnorr, [], [0, 2], false),
+    tapLeafScript: PSBTInfo(21, TaprootControlBlock, BytesInf, [], [0, 2], false),
+    // BIP371 key data here is a 32-byte x-only pubkey, so reuse the shared Schnorr pubkey coder
+    // instead of accepting arbitrary 32-byte blobs that only fail much later in taproot flows.
+    tapBip32Derivation: PSBTInfo(22, PubKeySchnorr, TaprootBIP32Der, [], [0, 2], false),
+    tapInternalKey: PSBTInfo(23, false, PubKeySchnorr, [], [0, 2], false),
+    tapMerkleRoot: PSBTInfo(24, false, Bytes32, [], [0, 2], false),
+    proprietary: PSBTInfo(252, BytesInf, BytesInf, [], [0, 2], false)
+  }))();
+  var PSBTInputFinalKeys = /* @__PURE__ */ Object.freeze([
+    // PSBTv2 extractors rebuild the final transaction from per-input fields, so
+    // finalized inputs still need txid/index (and any non-default sequence)
+    // even though BIP174's generic cleanup is stricter.
+    "txid",
+    "sequence",
+    "index",
+    "witnessUtxo",
+    "nonWitnessUtxo",
+    "finalScriptSig",
+    "finalScriptWitness",
+    "unknown"
+  ]);
+  var PSBTInputUnsignedKeys = /* @__PURE__ */ Object.freeze([
+    // This is the replace/remove allowlist for signed inputs; mergeKeyMap() can still append
+    // previously absent metadata or new KV entries for other fields when they don't conflict.
+    "partialSig",
+    "finalScriptSig",
+    "finalScriptWitness",
+    "tapKeySig",
+    "tapScriptSig"
+  ]);
+  var PSBTOutput = /* @__PURE__ */ (() => Object.freeze({
+    redeemScript: PSBTInfo(0, false, BytesInf, [], [0, 2], false),
+    witnessScript: PSBTInfo(1, false, BytesInf, [], [0, 2], false),
+    bip32Derivation: PSBTInfo(2, PubKeyECDSA, BIP32Der, [], [0, 2], false),
+    // BIP174/BIP370 serialize PSBT_OUT_AMOUNT as a signed int64 on the wire; semantic output
+    // validity still rejects negative transaction amounts in `PSBTOutputCoder` below.
+    amount: PSBTInfo(3, false, I64LE, [2], [2], true),
+    script: PSBTInfo(4, false, BytesInf, [2], [2], true),
+    tapInternalKey: PSBTInfo(5, false, PubKeySchnorr, [], [0, 2], false),
+    // BIP371 expects a non-empty DFS-ordered list of tapleaf tuples here so wallets can
+    // reconstruct the same Taproot tree, not just an arbitrary list of serialized leaves.
+    tapTree: PSBTInfo(6, false, tapTree, [], [0, 2], false),
+    tapBip32Derivation: PSBTInfo(7, PubKeySchnorr, TaprootBIP32Der, [], [0, 2], false),
+    proprietary: PSBTInfo(252, BytesInf, BytesInf, [], [0, 2], false)
+  }))();
+  var PSBTOutputUnsignedKeys = /* @__PURE__ */ Object.freeze([]);
+  var PSBTKeyPair = /* @__PURE__ */ (() => array(NULL, struct({
+    //  <key> := <keylen> <keytype> <keydata> WHERE keylen = len(keytype)+len(keydata)
+    key: prefix(CompactSizeLen, struct({ type: CompactSizeLen, key: createBytes(null) })),
+    //  <value> := <valuelen> <valuedata>
+    value: createBytes(CompactSizeLen)
+  })))();
+  function PSBTKeyInfo(info) {
+    const [type, kc, vc, reqInc, allowInc, silentIgnore] = info;
+    return { type, kc, vc, reqInc, allowInc, silentIgnore };
+  }
+  var PSBTUnknownKey = /* @__PURE__ */ (() => (
+    // Raw unknown/proprietary field key: compact-size keytype plus opaque keydata for pass-through.
+    struct({ type: CompactSizeLen, key: createBytes(null) })
+  ))();
+  function PSBTKeyMap(psbtEnum) {
+    const byType = {};
+    for (const k in psbtEnum) {
+      const [num2, kc, vc] = psbtEnum[k];
+      byType[num2] = [k, kc, vc];
+    }
+    return wrap({
+      encodeStream: (w, value) => {
+        const _value = value;
+        let out = [];
+        const seen = {};
+        const add2 = (key, value2) => {
+          const _value2 = value2;
+          const kStr = hex.encode(PSBTUnknownKey.encode(key));
+          if (seen[kStr])
+            throw new Error(`PSBT: duplicate key=${kStr}`);
+          seen[kStr] = true;
+          out.push({ key, value: _value2 });
+        };
+        for (const name in psbtEnum) {
+          const val = _value[name];
+          if (val === void 0)
+            continue;
+          const [type, kc, vc] = psbtEnum[name];
+          if (!kc) {
+            add2({ type, key: EMPTY }, vc.encode(val));
+          } else {
+            const kv = val.map(([k, v]) => [
+              kc.encode(k),
+              vc.encode(v)
+            ]);
+            kv.sort((a, b) => compareBytes(a[0], b[0]));
+            for (const [key, value2] of kv)
+              add2({ key, type }, value2);
+          }
+        }
+        if (_value.unknown) {
+          _value.unknown.sort((a, b) => compareBytes(a[0].key, b[0].key));
+          for (const [k, v] of _value.unknown)
+            add2(k, v);
+        }
+        PSBTKeyPair.encodeStream(w, out);
+      },
+      decodeStream: (r) => {
+        const raw = PSBTKeyPair.decodeStream(r);
+        const out = {};
+        const noKey = {};
+        const seen = {};
+        for (const elm of raw) {
+          const kStr = hex.encode(PSBTUnknownKey.encode(elm.key));
+          if (seen[kStr])
+            throw new Error(`PSBT: duplicate key=${kStr}`);
+          seen[kStr] = true;
+          let name = "unknown";
+          let key = elm.key.key;
+          let value = elm.value;
+          if (byType[elm.key.type]) {
+            const [_name, kc, vc] = byType[elm.key.type];
+            name = _name;
+            if (!kc && key.length) {
+              throw new Error(`PSBT: Non-empty key for ${name} (key=${hex.encode(key)} value=${hex.encode(value)}`);
+            }
+            key = kc ? kc.decode(key) : void 0;
+            value = vc.decode(value);
+            if (!kc) {
+              if (out[name])
+                throw new Error(`PSBT: Same keys: ${name} (key=${key} value=${value})`);
+              out[name] = value;
+              noKey[name] = true;
+              continue;
+            }
+          } else {
+            key = { type: elm.key.type, key: elm.key.key };
+          }
+          if (noKey[name])
+            throw new Error(`PSBT: Key type with empty key and no key=${name} val=${value}`);
+          if (!out[name])
+            out[name] = [];
+          out[name].push([key, value]);
+        }
+        return out;
+      }
+    });
+  }
+  var PSBTInputCoder = /* @__PURE__ */ (() => Object.freeze(validate(PSBTKeyMap(PSBTInput), (i) => {
+    if (i.finalScriptWitness && !i.finalScriptWitness.length)
+      throw new Error("validateInput: empty finalScriptWitness");
+    if (i.partialSig && !i.partialSig.length)
+      throw new Error("Empty partialSig");
+    if (i.partialSig)
+      for (const [k] of i.partialSig)
+        validatePubkey(k, PubT.ecdsa);
+    if (i.bip32Derivation)
+      for (const [k] of i.bip32Derivation)
+        validatePubkey(k, PubT.ecdsa);
+    if (i.requiredTimeLocktime !== void 0 && i.requiredTimeLocktime < 5e8)
+      throw new Error(`validateInput: wrong timeLocktime=${i.requiredTimeLocktime}`);
+    if (i.requiredHeightLocktime !== void 0 && (i.requiredHeightLocktime <= 0 || i.requiredHeightLocktime >= 5e8))
+      throw new Error(`validateInput: wrong heighLocktime=${i.requiredHeightLocktime}`);
+    if (i.tapLeafScript) {
+      for (const [k, v] of i.tapLeafScript) {
+        if ((k.version & 254) !== v[v.length - 1])
+          throw new Error("validateInput: tapLeafScript version mimatch");
+        if (v[v.length - 1] & 1)
+          throw new Error("validateInput: tapLeafScript version has parity bit!");
+      }
+    }
+    return i;
+  })))();
+  var PSBTOutputCoder = /* @__PURE__ */ (() => Object.freeze(validate(PSBTKeyMap(PSBTOutput), (o) => {
+    if (o.amount !== void 0 && o.amount < 0n)
+      throw new Error(`validateOutput: wrong amount=${o.amount}`);
+    if (o.bip32Derivation)
+      for (const [k] of o.bip32Derivation)
+        validatePubkey(k, PubT.ecdsa);
+    return o;
+  })))();
+  var PSBTGlobalCoder = /* @__PURE__ */ (() => validate(PSBTKeyMap(PSBTGlobal), (g) => {
+    const version = g.version || 0;
+    if (version === 0) {
+      if (!g.unsignedTx)
+        throw new Error("PSBTv0: missing unsignedTx");
+      for (const inp of g.unsignedTx.inputs)
+        if (inp.finalScriptSig && inp.finalScriptSig.length)
+          throw new Error("PSBTv0: input scriptSig found in unsignedTx");
+    }
+    for (const [xpub, der] of g.xpub || []) {
+      if (xpub.depth !== der.path.length)
+        throw new Error(`PSBT_GLOBAL_XPUB: xpub depth=${xpub.depth} must match derivation path length=${der.path.length}`);
+    }
+    return g;
+  }))();
+  var _RawPSBTV0 = /* @__PURE__ */ (() => Object.freeze(struct({
+    magic: magic(string(new Uint8Array([255])), "psbt"),
+    global: PSBTGlobalCoder,
+    // Raw v0 framing follows the unsigned transaction for input-map count; the stricter
+    // one-map-per-input/output reconciliation happens in `RawPSBTV0` / `validatePSBT`.
+    inputs: array("global/unsignedTx/inputs/length", PSBTInputCoder),
+    outputs: array(null, PSBTOutputCoder)
+  })))();
+  var _RawPSBTV2 = /* @__PURE__ */ (() => Object.freeze(struct({
+    magic: magic(string(new Uint8Array([255])), "psbt"),
+    global: PSBTGlobalCoder,
+    // Raw v2 framing takes map counts from the global PSBTv2 count fields; deeper version
+    // and per-field validation still happens in `RawPSBTV2` / `validatePSBT`.
+    inputs: array("global/inputCount", PSBTInputCoder),
+    outputs: array("global/outputCount", PSBTOutputCoder)
+  })))();
+  function validatePSBTFields(version, info, lst) {
+    const _lst = lst;
+    for (const k in _lst) {
+      if (k === "unknown")
+        continue;
+      if (!info[k])
+        continue;
+      const { allowInc } = PSBTKeyInfo(info[k]);
+      if (!allowInc.includes(version))
+        throw new Error(`PSBTv${version}: field ${k} is not allowed`);
+    }
+    for (const k in info) {
+      const { reqInc } = PSBTKeyInfo(info[k]);
+      if (reqInc.includes(version) && _lst[k] === void 0)
+        throw new Error(`PSBTv${version}: missing required field ${k}`);
+    }
+  }
+  function cleanPSBTFields(version, info, lst) {
+    const _lst = lst;
+    const out = {};
+    for (const _k in _lst) {
+      const k = _k;
+      if (k !== "unknown") {
+        if (!info[k])
+          continue;
+        const { allowInc, silentIgnore } = PSBTKeyInfo(info[k]);
+        if (!allowInc.includes(version)) {
+          if (silentIgnore)
+            continue;
+          throw new Error(`Failed to serialize in PSBTv${version}: ${k} but versions allows inclusion=${allowInc}`);
+        }
+      }
+      out[k] = _lst[k];
+    }
+    return out;
+  }
+  function validatePSBT(tx) {
+    const version = tx && tx.global && tx.global.version || 0;
+    validatePSBTFields(version, PSBTGlobal, tx.global);
+    for (const i of tx.inputs)
+      validatePSBTFields(version, PSBTInput, i);
+    for (const o of tx.outputs)
+      validatePSBTFields(version, PSBTOutput, o);
+    const inputCount = !version ? tx.global.unsignedTx.inputs.length : tx.global.inputCount;
+    if (tx.inputs.length < inputCount)
+      throw new Error("Not enough inputs");
+    const inputsLeft = tx.inputs.slice(inputCount);
+    if (inputsLeft.length > 1 || inputsLeft.length && Object.keys(inputsLeft[0]).length)
+      throw new Error(`Unexpected inputs left in tx=${inputsLeft}`);
+    const outputCount = !version ? tx.global.unsignedTx.outputs.length : tx.global.outputCount;
+    if (tx.outputs.length < outputCount)
+      throw new Error("Not outputs inputs");
+    const outputsLeft = tx.outputs.slice(outputCount);
+    if (outputsLeft.length > 1 || outputsLeft.length && Object.keys(outputsLeft[0]).length)
+      throw new Error(`Unexpected outputs left in tx=${outputsLeft}`);
+    return tx;
+  }
+  function mergeKeyMap(psbtEnum, val, cur, allowedFields, allowUnknown) {
+    const _val = val;
+    const _cur = cur;
+    const _allowedFields = allowedFields;
+    const res = { ..._cur, ..._val };
+    for (const k in psbtEnum) {
+      const key = k;
+      const [_, kC, vC] = psbtEnum[key];
+      const cannotChange = _allowedFields && !_allowedFields.includes(k);
+      if (_val[k] === void 0 && k in _val) {
+        if (cannotChange)
+          throw new Error(`Cannot remove signed field=${k}`);
+        delete res[k];
+      } else if (kC) {
+        const oldKV = _cur && _cur[k] ? _cur[k] : [];
+        let newKV = _val[key];
+        if (newKV) {
+          if (!Array.isArray(newKV))
+            throw new Error(`keyMap(${k}): KV pairs should be [k, v][]`);
+          newKV = newKV.map((val2) => {
+            if (val2.length !== 2)
+              throw new Error(`keyMap(${k}): KV pairs should be [k, v][]`);
+            return [
+              typeof val2[0] === "string" ? kC.decode(hex.decode(val2[0])) : val2[0],
+              typeof val2[1] === "string" ? vC.decode(hex.decode(val2[1])) : val2[1]
+            ];
+          });
+          const map = {};
+          const add2 = (kStr, k2, v) => {
+            if (map[kStr] === void 0) {
+              map[kStr] = [k2, v];
+              return;
+            }
+            const oldVal = hex.encode(vC.encode(map[kStr][1]));
+            const newVal = hex.encode(vC.encode(v));
+            if (oldVal !== newVal)
+              throw new Error(`keyMap(${key}): same key=${kStr} oldVal=${oldVal} newVal=${newVal}`);
+          };
+          for (const [k2, v] of oldKV) {
+            const kStr = hex.encode(kC.encode(k2));
+            add2(kStr, k2, v);
+          }
+          for (const [k2, v] of newKV) {
+            const kStr = hex.encode(kC.encode(k2));
+            if (v === void 0) {
+              if (cannotChange)
+                throw new Error(`Cannot remove signed field=${key}/${k2}`);
+              delete map[kStr];
+            } else
+              add2(kStr, k2, v);
+          }
+          res[key] = Object.values(map);
+        }
+      } else if (typeof res[k] === "string") {
+        res[k] = vC.decode(hex.decode(res[k]));
+      } else if (cannotChange && k in _val && _cur && _cur[k] !== void 0) {
+        if (!equalBytes3(vC.encode(_val[k]), vC.encode(_cur[k])))
+          throw new Error(`Cannot change signed field=${k}`);
+      }
+    }
+    if (allowUnknown && _val.unknown) {
+      const map = {};
+      for (const [k, v] of _cur?.unknown || [])
+        map[hex.encode(PSBTUnknownKey.encode(k))] = [k, v];
+      for (const [k, v] of _val.unknown) {
+        const kStr = hex.encode(PSBTUnknownKey.encode(k));
+        if (map[kStr] === void 0) {
+          map[kStr] = [k, v];
+          continue;
+        }
+        const oldVal = hex.encode(BytesInf.encode(map[kStr][1]));
+        const newVal = hex.encode(BytesInf.encode(v));
+        if (oldVal !== newVal)
+          throw new Error(`keyMap(unknown): same key=${kStr} oldVal=${oldVal} newVal=${newVal}`);
+      }
+      res.unknown = Object.values(map);
+    }
+    for (const k in res) {
+      if (!psbtEnum[k]) {
+        if (allowUnknown && k === "unknown")
+          continue;
+        delete res[k];
+      }
+    }
+    return res;
+  }
+  var RawPSBTV0 = /* @__PURE__ */ (() => Object.freeze(validate(_RawPSBTV0, validatePSBT)))();
+  var RawPSBTV2 = /* @__PURE__ */ (() => Object.freeze(validate(_RawPSBTV2, validatePSBT)))();
 
   // node_modules/@scure/btc-signer/payment.js
   var OutP2A = {
@@ -5535,6 +6378,51 @@
     }
     return i;
   })))();
+  function checkWSH(s, witnessScript) {
+    if (!equalBytes3(s.hash, sha2562(witnessScript)))
+      throw new Error("checkScript: wsh wrong witnessScript hash");
+    const w = OutScript.decode(witnessScript);
+    if (w.type === "tr" || w.type === "tr_ns" || w.type === "tr_ms")
+      throw new Error(`checkScript: P2${w.type} cannot be wrapped in P2SH`);
+    if (w.type === "wpkh" || w.type === "wsh" || w.type === "sh")
+      throw new Error(`checkScript: P2${w.type} cannot be wrapped in P2WSH`);
+  }
+  function checkScript(script, redeemScript, witnessScript) {
+    let hasWsh = false;
+    let r = void 0;
+    if (script) {
+      const s = OutScript.decode(script);
+      if (s.type === "tr_ns" || s.type === "tr_ms" || s.type === "ms" || s.type == "pk")
+        throw new Error(`checkScript: non-wrapped ${s.type}`);
+      if (redeemScript) {
+        if (s.type !== "sh")
+          throw new Error("checkScript: redeemScript without P2SH");
+        if (!equalBytes3(s.hash, hash1602(redeemScript)))
+          throw new Error("checkScript: sh wrong redeemScript hash");
+        r = OutScript.decode(redeemScript);
+        if (r?.type === "tr" || r?.type === "tr_ns" || r?.type === "tr_ms")
+          throw new Error(`checkScript: P2${r.type} cannot be wrapped in P2SH`);
+        if (r?.type === "sh")
+          throw new Error("checkScript: P2SH cannot be wrapped in P2SH");
+      }
+      if (s.type === "wsh") {
+        hasWsh = true;
+        if (witnessScript)
+          checkWSH(s, witnessScript);
+      }
+    }
+    if (redeemScript) {
+      if (r === void 0)
+        r = OutScript.decode(redeemScript);
+      if (r?.type === "wsh") {
+        hasWsh = true;
+        if (witnessScript)
+          checkWSH(r, witnessScript);
+      }
+    }
+    if (witnessScript && !hasWsh)
+      throw new Error("checkScript: witnessScript without P2WSH");
+  }
   function checkTaprootScript(script, internalPubKey, allowUnknownOutputs = false, customScripts) {
     const out = OutScript.decode(script);
     if (out.type === "unknown") {
@@ -5782,6 +6670,1124 @@
     };
   }
 
+  // node_modules/@scure/btc-signer/transaction.js
+  var EMPTY32 = /* @__PURE__ */ new Uint8Array(32);
+  var EMPTY_OUTPUT = {
+    amount: 0xffffffffffffffffn,
+    script: EMPTY
+  };
+  var toVsize = (weight) => Math.ceil(weight / 4);
+  var stripCodeSeparator = (script) => {
+    let start = 0;
+    const out = [];
+    for (let i = 0; i < script.length; ) {
+      const pos = i;
+      const op = script[i++];
+      if (op === OP.CODESEPARATOR) {
+        if (start < pos)
+          out.push(script.subarray(start, pos));
+        start = i;
+        continue;
+      }
+      const len = scriptPushLen(op, (bytes) => {
+        if (i + bytes > script.length)
+          throw new Error("Unexpected end of script");
+        let len2 = 0;
+        for (let j = 0; j < bytes; j++)
+          len2 |= script[i + j] << 8 * j;
+        i += bytes;
+        return len2;
+      });
+      if (len === void 0)
+        continue;
+      i += len;
+      if (i > script.length)
+        throw new Error("Unexpected end of script");
+    }
+    if (start === 0)
+      return script;
+    if (start < script.length)
+      out.push(script.subarray(start));
+    return out.length ? concatBytes4(...out) : EMPTY;
+  };
+  var DEFAULT_VERSION = 2;
+  var DEFAULT_LOCKTIME = 0;
+  var DEFAULT_SEQUENCE = 4294967295;
+  var def = (value, def2) => value === void 0 ? def2 : value;
+  function cloneDeep(obj) {
+    if (Array.isArray(obj))
+      return obj.map((i) => cloneDeep(i));
+    else if (isBytes5(obj))
+      return Uint8Array.from(obj);
+    else if (["number", "bigint", "boolean", "string", "undefined"].includes(typeof obj))
+      return obj;
+    else if (obj === null)
+      return obj;
+    else if (typeof obj === "object") {
+      return Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, cloneDeep(v)]));
+    }
+    throw new Error(`cloneDeep: unknown type=${typeof obj}`);
+  }
+  var SignatureHash = /* @__PURE__ */ (() => Object.freeze({
+    DEFAULT: 0,
+    ALL: 1,
+    NONE: 2,
+    SINGLE: 3,
+    ANYONECANPAY: 128
+  }))();
+  var SigHash = /* @__PURE__ */ (() => Object.freeze({
+    DEFAULT: SignatureHash.DEFAULT,
+    ALL: SignatureHash.ALL,
+    NONE: SignatureHash.NONE,
+    SINGLE: SignatureHash.SINGLE,
+    // BIP341 only permits 0x00, 0x01, 0x02, 0x03, 0x81, 0x82, and 0x83 for taproot, so
+    // the mechanical `DEFAULT | ANYONECANPAY` combination (0x80) is invalid and not exported.
+    // DEFAULT_ANYONECANPAY: SignatureHash.DEFAULT | SignatureHash.ANYONECANPAY,
+    ALL_ANYONECANPAY: SignatureHash.ALL | SignatureHash.ANYONECANPAY,
+    NONE_ANYONECANPAY: SignatureHash.NONE | SignatureHash.ANYONECANPAY,
+    SINGLE_ANYONECANPAY: SignatureHash.SINGLE | SignatureHash.ANYONECANPAY
+  }))();
+  var SigHashNames = /* @__PURE__ */ (() => Object.freeze(reverseObject(SigHash)))();
+  function getTaprootKeys(privKey, pubKey, internalKey, merkleRoot = EMPTY) {
+    if (equalBytes3(internalKey, pubKey)) {
+      privKey = taprootTweakPrivKey(privKey, merkleRoot);
+      pubKey = pubSchnorr(privKey);
+    }
+    return { privKey, pubKey };
+  }
+  function outputBeforeSign(i) {
+    if (i.script === void 0 || i.amount === void 0)
+      throw new Error("Transaction/output: script and amount required");
+    return { script: i.script, amount: i.amount };
+  }
+  function inputBeforeSign(i) {
+    if (i.txid === void 0 || i.index === void 0)
+      throw new Error("Transaction/input: txid and index required");
+    const res = {
+      txid: i.txid,
+      index: i.index,
+      sequence: def(i.sequence, DEFAULT_SEQUENCE),
+      finalScriptSig: def(i.finalScriptSig, EMPTY)
+    };
+    RawInput.encode(res);
+    return res;
+  }
+  function cleanFinalInput(i) {
+    const _i = i;
+    for (const _k in _i) {
+      const k = _k;
+      if (!PSBTInputFinalKeys.includes(k))
+        delete _i[k];
+    }
+  }
+  var TxHashIdx = /* @__PURE__ */ (() => struct({ txid: createBytes(32, true), index: U32LE }))();
+  function validateSigHash(s) {
+    if (typeof s !== "number" || typeof SigHashNames[s] !== "string")
+      throw new Error(`Invalid SigHash=${s}`);
+    return s;
+  }
+  function unpackSighash(hashType) {
+    const masked = hashType & 31;
+    return {
+      isAny: !!(hashType & SignatureHash.ANYONECANPAY),
+      isNone: masked === SignatureHash.NONE,
+      isSingle: masked === SignatureHash.SINGLE
+    };
+  }
+  function validateOpts(opts) {
+    if (opts !== void 0 && {}.toString.call(opts) !== "[object Object]")
+      throw new Error(`Wrong object type for transaction options: ${opts}`);
+    const _opts = {
+      ...opts,
+      // Defaults
+      version: def(opts.version, DEFAULT_VERSION),
+      lockTime: def(opts.lockTime, 0),
+      PSBTVersion: def(opts.PSBTVersion, 0)
+    };
+    if (typeof _opts.allowUnknowInput !== "undefined")
+      _opts.allowUnknownInputs = _opts.allowUnknowInput;
+    if (typeof _opts.allowUnknowOutput !== "undefined")
+      _opts.allowUnknownOutputs = _opts.allowUnknowOutput;
+    if (typeof _opts.lockTime !== "number")
+      throw new Error("Transaction lock time should be number");
+    U32LE.encode(_opts.lockTime);
+    if (_opts.PSBTVersion !== 0 && _opts.PSBTVersion !== 2)
+      throw new Error(`Unknown PSBT version ${_opts.PSBTVersion}`);
+    for (const k of [
+      "allowUnknownVersion",
+      "allowUnknownOutputs",
+      "allowUnknownInputs",
+      "disableScriptCheck",
+      "bip174jsCompat",
+      "allowLegacyWitnessUtxo",
+      "lowR"
+    ]) {
+      const v = _opts[k];
+      if (v === void 0)
+        continue;
+      if (typeof v !== "boolean")
+        throw new Error(`Transation options wrong type: ${k}=${v} (${typeof v})`);
+    }
+    if (_opts.allowUnknownVersion ? typeof _opts.version === "number" : ![-1, 0, 1, 2, 3].includes(_opts.version))
+      throw new Error(`Unknown version: ${_opts.version}`);
+    if (_opts.customScripts !== void 0) {
+      const cs = _opts.customScripts;
+      if (!Array.isArray(cs)) {
+        throw new Error(`wrong custom scripts type (expected array): customScripts=${cs} (${typeof cs})`);
+      }
+      for (const s of cs) {
+        if (typeof s.encode !== "function" || typeof s.decode !== "function")
+          throw new Error(`wrong script=${s} (${typeof s})`);
+        if (s.finalizeTaproot !== void 0 && typeof s.finalizeTaproot !== "function")
+          throw new Error(`wrong script=${s} (${typeof s})`);
+      }
+    }
+    return Object.freeze(_opts);
+  }
+  function validateInput(i) {
+    const _i = i;
+    if (_i.nonWitnessUtxo && _i.index !== void 0) {
+      const last = _i.nonWitnessUtxo.outputs.length - 1;
+      if (_i.index > last)
+        throw new Error(`validateInput: index(${_i.index}) not in nonWitnessUtxo`);
+      const prevOut = _i.nonWitnessUtxo.outputs[_i.index];
+      if (_i.witnessUtxo && (!equalBytes3(_i.witnessUtxo.script, prevOut.script) || _i.witnessUtxo.amount !== prevOut.amount))
+        throw new Error("validateInput: witnessUtxo different from nonWitnessUtxo");
+      if (_i.txid) {
+        const outputs = _i.nonWitnessUtxo.outputs;
+        if (outputs.length - 1 < _i.index)
+          throw new Error("nonWitnessUtxo: incorect output index");
+        const tx = Transaction.fromRaw(RawTx.encode(_i.nonWitnessUtxo), {
+          allowUnknownOutputs: true,
+          disableScriptCheck: true,
+          allowUnknownInputs: true
+        });
+        const txid = hex.encode(_i.txid);
+        if (tx.id !== txid)
+          throw new Error(`nonWitnessUtxo: wrong txid, exp=${txid} got=${tx.id}`);
+      }
+    }
+    return _i;
+  }
+  function getPrevOut(input) {
+    const _input = input;
+    if (_input.nonWitnessUtxo) {
+      if (_input.index === void 0)
+        throw new Error("Unknown input index");
+      if (!Number.isSafeInteger(_input.index) || _input.index < 0 || _input.index >= _input.nonWitnessUtxo.outputs.length)
+        throw new Error(`Wrong input index=${_input.index}`);
+      return _input.nonWitnessUtxo.outputs[_input.index];
+    } else if (_input.witnessUtxo)
+      return _input.witnessUtxo;
+    else
+      throw new Error("Cannot find previous output info");
+  }
+  function normalizeInput(i, cur, allowedFields, disableScriptCheck = false, allowUnknown = false) {
+    const _i = i;
+    const _cur = cur;
+    const _allowedFields = allowedFields;
+    let { nonWitnessUtxo, txid } = _i;
+    if (typeof nonWitnessUtxo === "string")
+      nonWitnessUtxo = hex.decode(nonWitnessUtxo);
+    if (isBytes5(nonWitnessUtxo))
+      nonWitnessUtxo = RawTx.decode(nonWitnessUtxo);
+    if (!("nonWitnessUtxo" in _i) && nonWitnessUtxo === void 0)
+      nonWitnessUtxo = _cur?.nonWitnessUtxo;
+    if (typeof txid === "string")
+      txid = hex.decode(txid);
+    if (txid === void 0)
+      txid = _cur?.txid;
+    let res = { ..._cur, ..._i, nonWitnessUtxo, txid };
+    if (!("nonWitnessUtxo" in _i) && res.nonWitnessUtxo === void 0)
+      delete res.nonWitnessUtxo;
+    if (res.sequence === void 0)
+      res.sequence = DEFAULT_SEQUENCE;
+    if (res.tapMerkleRoot === null)
+      delete res.tapMerkleRoot;
+    res = mergeKeyMap(PSBTInput, res, _cur, _allowedFields, allowUnknown);
+    PSBTInputCoder.encode(res);
+    let prevOut;
+    if (res.nonWitnessUtxo && res.index !== void 0)
+      prevOut = res.nonWitnessUtxo.outputs[res.index];
+    else if (res.witnessUtxo)
+      prevOut = res.witnessUtxo;
+    if (prevOut && !disableScriptCheck)
+      checkScript(prevOut && prevOut.script, res.redeemScript, res.witnessScript);
+    return res;
+  }
+  function getInputType(input, allowLegacyWitnessUtxo = false) {
+    const _input = input;
+    let txType = "legacy";
+    let defaultSighash = SignatureHash.ALL;
+    const prevOut = getPrevOut(_input);
+    const first = OutScript.decode(prevOut.script);
+    let type = first.type;
+    let cur = first;
+    const stack = [first];
+    if (first.type === "tr") {
+      defaultSighash = SignatureHash.DEFAULT;
+      return {
+        txType: "taproot",
+        type: "tr",
+        last: first,
+        lastScript: prevOut.script,
+        defaultSighash,
+        sighash: _input.sighashType || defaultSighash
+      };
+    } else {
+      if (first.type === "wpkh" || first.type === "wsh")
+        txType = "segwit";
+      if (first.type === "sh") {
+        if (!_input.redeemScript)
+          throw new Error("inputType: sh without redeemScript");
+        let child = OutScript.decode(_input.redeemScript);
+        if (child.type === "wpkh" || child.type === "wsh")
+          txType = "segwit";
+        stack.push(child);
+        cur = child;
+        type += `-${child.type}`;
+      }
+      if (cur.type === "wsh") {
+        if (!_input.witnessScript)
+          throw new Error("inputType: wsh without witnessScript");
+        let child = OutScript.decode(_input.witnessScript);
+        if (child.type === "wsh")
+          txType = "segwit";
+        stack.push(child);
+        cur = child;
+        type += `-${child.type}`;
+      }
+      const last = stack[stack.length - 1];
+      if (last.type === "sh" || last.type === "wsh")
+        throw new Error("inputType: sh/wsh cannot be terminal type");
+      const lastScript = OutScript.encode(last);
+      const res = {
+        type,
+        txType,
+        last,
+        lastScript,
+        defaultSighash,
+        sighash: _input.sighashType || defaultSighash
+      };
+      if (txType === "legacy" && !allowLegacyWitnessUtxo && !_input.nonWitnessUtxo) {
+        throw new Error(`Transaction/sign: legacy input without nonWitnessUtxo, can result in attack that forces paying higher fees. Pass allowLegacyWitnessUtxo=true, if you sure`);
+      }
+      return res;
+    }
+  }
+  var Transaction = class _Transaction {
+    global = {};
+    inputs = [];
+    // use getInput()
+    outputs = [];
+    // use getOutput()
+    opts;
+    constructor(opts = {}) {
+      const _opts = this.opts = validateOpts(opts);
+      if (_opts.lockTime !== DEFAULT_LOCKTIME)
+        this.global.fallbackLocktime = _opts.lockTime;
+      this.global.txVersion = _opts.version;
+    }
+    // Import
+    static fromRaw(raw, opts = {}) {
+      const parsed = RawTx.decode(raw);
+      const tx = new _Transaction({ ...opts, version: parsed.version, lockTime: parsed.lockTime });
+      for (const o of parsed.outputs)
+        tx.addOutput(o);
+      tx.outputs = parsed.outputs;
+      tx.inputs = parsed.inputs;
+      if (parsed.witnesses) {
+        for (let i = 0; i < parsed.witnesses.length; i++)
+          tx.inputs[i].finalScriptWitness = parsed.witnesses[i];
+      }
+      return tx;
+    }
+    // PSBT
+    static fromPSBT(psbt_, opts = {}) {
+      let parsed;
+      try {
+        parsed = RawPSBTV0.decode(psbt_);
+      } catch (e0) {
+        try {
+          parsed = RawPSBTV2.decode(psbt_);
+        } catch (e2) {
+          throw e0;
+        }
+      }
+      const PSBTVersion = parsed.global.version || 0;
+      if (PSBTVersion !== 0 && PSBTVersion !== 2)
+        throw new Error(`Wrong PSBT version=${PSBTVersion}`);
+      const unsigned = parsed.global.unsignedTx;
+      const version = PSBTVersion === 0 ? unsigned?.version : parsed.global.txVersion;
+      const lockTime = PSBTVersion === 0 ? unsigned?.lockTime : parsed.global.fallbackLocktime;
+      const tx = new _Transaction({ ...opts, version, lockTime, PSBTVersion });
+      const inputCount = PSBTVersion === 0 ? unsigned?.inputs.length : parsed.global.inputCount;
+      tx.inputs = parsed.inputs.slice(0, inputCount).map((i, j) => validateInput({
+        finalScriptSig: EMPTY,
+        ...parsed.global.unsignedTx?.inputs[j],
+        ...i
+      }));
+      const outputCount = PSBTVersion === 0 ? unsigned?.outputs.length : parsed.global.outputCount;
+      tx.outputs = parsed.outputs.slice(0, outputCount).map((i, j) => ({
+        ...i,
+        ...parsed.global.unsignedTx?.outputs[j]
+      }));
+      tx.global = { ...parsed.global, txVersion: version };
+      if (lockTime !== DEFAULT_LOCKTIME)
+        tx.global.fallbackLocktime = lockTime;
+      return tx;
+    }
+    // Prefer `global.version` when present so cross-version combiners can serialize at the highest
+    // required PSBT version without mutating the frozen transaction options object.
+    toPSBT(PSBTVersion = this.global.version || this.opts.PSBTVersion) {
+      if (PSBTVersion !== 0 && PSBTVersion !== 2)
+        throw new Error(`Wrong PSBT version=${PSBTVersion}`);
+      const inputs = this.inputs.map((i) => (
+        // For PSBTv0 the prevout txid/index live in global.unsignedTx rather than the input map, so
+        // validate the full transaction input before version filtering drops those fields.
+        cleanPSBTFields(PSBTVersion, PSBTInput, validateInput(i))
+      ));
+      for (const inp of inputs) {
+        if (inp.partialSig && !inp.partialSig.length)
+          delete inp.partialSig;
+        if (inp.finalScriptSig && !inp.finalScriptSig.length)
+          delete inp.finalScriptSig;
+        if (inp.finalScriptWitness && !inp.finalScriptWitness.length)
+          delete inp.finalScriptWitness;
+      }
+      const outputs = this.outputs.map((i) => cleanPSBTFields(PSBTVersion, PSBTOutput, i));
+      const global = { ...this.global };
+      if (PSBTVersion === 0) {
+        global.unsignedTx = RawOldTx.decode(RawOldTx.encode({
+          version: this.version,
+          lockTime: this.lockTime,
+          inputs: this.inputs.map((i) => inputBeforeSign(i)).map((i) => ({
+            ...i,
+            finalScriptSig: EMPTY
+          })),
+          outputs: this.outputs.map((o) => outputBeforeSign(o))
+        }));
+        delete global.fallbackLocktime;
+        delete global.txVersion;
+        delete global.inputCount;
+        delete global.outputCount;
+        delete global.version;
+      } else {
+        delete global.unsignedTx;
+        global.version = PSBTVersion;
+        global.txVersion = this.version;
+        global.inputCount = this.inputs.length;
+        global.outputCount = this.outputs.length;
+        if (global.fallbackLocktime && global.fallbackLocktime === DEFAULT_LOCKTIME)
+          delete global.fallbackLocktime;
+      }
+      if (this.opts.bip174jsCompat) {
+        if (!inputs.length)
+          inputs.push({});
+        if (!outputs.length)
+          outputs.push({});
+      }
+      const raw = { global, inputs, outputs };
+      return PSBTVersion === 0 ? RawPSBTV0.encode(raw) : RawPSBTV2.encode(raw);
+    }
+    // BIP370 lockTime (https://github.com/bitcoin/bips/blob/master/bip-0370.mediawiki#determining-lock-time)
+    get lockTime() {
+      let height = DEFAULT_LOCKTIME;
+      let heightCnt = 0;
+      let time = DEFAULT_LOCKTIME;
+      let timeCnt = 0;
+      for (const i of this.inputs) {
+        if (i.requiredHeightLocktime) {
+          height = Math.max(height, i.requiredHeightLocktime);
+          heightCnt++;
+        }
+        if (i.requiredTimeLocktime) {
+          time = Math.max(time, i.requiredTimeLocktime);
+          timeCnt++;
+        }
+      }
+      if (heightCnt && heightCnt >= timeCnt)
+        return height;
+      if (time !== DEFAULT_LOCKTIME)
+        return time;
+      return this.global.fallbackLocktime || DEFAULT_LOCKTIME;
+    }
+    get version() {
+      if (this.global.txVersion === void 0)
+        throw new Error("No global.txVersion");
+      return this.global.txVersion;
+    }
+    inputStatus(idx) {
+      this.checkInputIdx(idx);
+      const input = this.inputs[idx];
+      if (input.finalScriptSig && input.finalScriptSig.length)
+        return "finalized";
+      if (input.finalScriptWitness && input.finalScriptWitness.length)
+        return "finalized";
+      if (input.tapKeySig)
+        return "signed";
+      if (input.tapScriptSig && input.tapScriptSig.length)
+        return "signed";
+      if (input.partialSig && input.partialSig.length)
+        return "signed";
+      return "unsigned";
+    }
+    // Cannot replace unpackSighash, tests rely on very generic implemenetation with signing inputs outside of range
+    // We will lose some vectors -> smaller test coverage of preimages (very important!)
+    inputSighash(idx) {
+      this.checkInputIdx(idx);
+      const inputSighash = this.inputs[idx].sighashType;
+      const sighash = inputSighash === void 0 ? SignatureHash.DEFAULT : inputSighash;
+      const sigOutputs = sighash === SignatureHash.DEFAULT ? SignatureHash.ALL : sighash & 3;
+      const sigInputs = sighash & SignatureHash.ANYONECANPAY;
+      return { sigInputs, sigOutputs };
+    }
+    // Very nice for debug purposes, but slow. If there is too much inputs/outputs to add, will be quadratic.
+    // Some cache will be nice, but there chance to have bugs with cache invalidation
+    signStatus() {
+      let addInput = true, addOutput = true;
+      let inputs = [], outputs = [];
+      for (let idx = 0; idx < this.inputs.length; idx++) {
+        const status = this.inputStatus(idx);
+        if (status === "unsigned")
+          continue;
+        const { sigInputs, sigOutputs } = this.inputSighash(idx);
+        if (sigInputs === SignatureHash.ANYONECANPAY)
+          inputs.push(idx);
+        else
+          addInput = false;
+        if (sigOutputs === SignatureHash.ALL)
+          addOutput = false;
+        else if (sigOutputs === SignatureHash.SINGLE)
+          outputs.push(idx);
+        else if (sigOutputs === SignatureHash.NONE) {
+        } else
+          throw new Error(`Wrong signature hash output type: ${sigOutputs}`);
+      }
+      return { addInput, addOutput, inputs, outputs };
+    }
+    get isFinal() {
+      for (let idx = 0; idx < this.inputs.length; idx++)
+        if (this.inputStatus(idx) !== "finalized")
+          return false;
+      return true;
+    }
+    // Info utils
+    get hasWitnesses() {
+      let out = false;
+      for (const i of this.inputs)
+        if (i.finalScriptWitness && i.finalScriptWitness.length)
+          out = true;
+      return out;
+    }
+    // https://en.bitcoin.it/wiki/Weight_units
+    get weight() {
+      if (!this.isFinal)
+        throw new Error("Transaction is not finalized");
+      let out = 32;
+      const outputs = this.outputs.map(outputBeforeSign);
+      out += 4 * CompactSizeLen.encode(this.outputs.length).length;
+      for (const o of outputs)
+        out += 32 + 4 * VarBytes.encode(o.script).length;
+      if (this.hasWitnesses)
+        out += 2;
+      out += 4 * CompactSizeLen.encode(this.inputs.length).length;
+      for (const i of this.inputs) {
+        out += 160 + 4 * VarBytes.encode(i.finalScriptSig || EMPTY).length;
+        if (this.hasWitnesses)
+          out += RawWitness.encode(i.finalScriptWitness || []).length;
+      }
+      return out;
+    }
+    get vsize() {
+      return toVsize(this.weight);
+    }
+    toBytes(withScriptSig = false, withWitness = false) {
+      return RawTx.encode({
+        version: this.version,
+        lockTime: this.lockTime,
+        inputs: this.inputs.map(inputBeforeSign).map((i) => ({
+          ...i,
+          finalScriptSig: withScriptSig && i.finalScriptSig || EMPTY
+        })),
+        outputs: this.outputs.map(outputBeforeSign),
+        witnesses: this.inputs.map((i) => i.finalScriptWitness || []),
+        segwitFlag: withWitness && this.hasWitnesses
+      });
+    }
+    get unsignedTx() {
+      return this.toBytes(false, false);
+    }
+    get hex() {
+      return hex.encode(this.toBytes(true, this.hasWitnesses));
+    }
+    get hash() {
+      return hex.encode(sha256x2(this.toBytes(true)));
+    }
+    get id() {
+      return hex.encode(sha256x2(this.toBytes(true)).reverse());
+    }
+    // Input stuff
+    checkInputIdx(idx) {
+      if (!Number.isSafeInteger(idx) || 0 > idx || idx >= this.inputs.length)
+        throw new Error(`Wrong input index=${idx}`);
+    }
+    getInput(idx) {
+      this.checkInputIdx(idx);
+      return cloneDeep(this.inputs[idx]);
+    }
+    get inputsLength() {
+      return this.inputs.length;
+    }
+    // Modification
+    addInput(input, _ignoreSignStatus = false) {
+      if (!_ignoreSignStatus && !this.signStatus().addInput)
+        throw new Error("Tx has signed inputs, cannot add new one");
+      this.inputs.push(cloneDeep(normalizeInput(input, void 0, void 0, this.opts.disableScriptCheck)));
+      return this.inputs.length - 1;
+    }
+    updateInput(idx, input, _ignoreSignStatus = false) {
+      this.checkInputIdx(idx);
+      let allowedFields = void 0;
+      if (!_ignoreSignStatus) {
+        const status = this.signStatus();
+        if (!status.addInput || status.inputs.includes(idx))
+          allowedFields = PSBTInputUnsignedKeys;
+      }
+      this.inputs[idx] = cloneDeep(normalizeInput(input, this.inputs[idx], allowedFields, this.opts.disableScriptCheck, this.opts.allowUnknown));
+    }
+    // Output stuff
+    checkOutputIdx(idx) {
+      if (!Number.isSafeInteger(idx) || 0 > idx || idx >= this.outputs.length)
+        throw new Error(`Wrong output index=${idx}`);
+    }
+    getOutput(idx) {
+      this.checkOutputIdx(idx);
+      return cloneDeep(this.outputs[idx]);
+    }
+    getOutputAddress(idx, network = NETWORK) {
+      const out = this.getOutput(idx);
+      if (!out.script)
+        return;
+      return Address(network).encode(OutScript.decode(out.script));
+    }
+    get outputsLength() {
+      return this.outputs.length;
+    }
+    normalizeOutput(o, cur, allowedFields) {
+      let { amount, script } = o;
+      if (amount === void 0)
+        amount = cur?.amount;
+      if (typeof amount !== "bigint")
+        throw new Error(`Wrong amount type, should be of type bigint in sats, but got ${amount} of type ${typeof amount}`);
+      if (typeof script === "string")
+        script = hex.decode(script);
+      if (script === void 0)
+        script = cur?.script;
+      let res = { ...cur, ...o, amount, script };
+      if (res.amount === void 0)
+        delete res.amount;
+      res = mergeKeyMap(PSBTOutput, res, cur, allowedFields, this.opts.allowUnknown);
+      PSBTOutputCoder.encode(res);
+      if (res.script && !this.opts.allowUnknownOutputs && OutScript.decode(res.script).type === "unknown") {
+        throw new Error("Transaction/output: unknown output script type, there is a chance that input is unspendable. Pass allowUnknownOutputs=true, if you sure");
+      }
+      if (!this.opts.disableScriptCheck)
+        checkScript(res.script, res.redeemScript, res.witnessScript);
+      return res;
+    }
+    addOutput(o, _ignoreSignStatus = false) {
+      if (!_ignoreSignStatus && !this.signStatus().addOutput)
+        throw new Error("Tx has signed outputs, cannot add new one");
+      this.outputs.push(cloneDeep(this.normalizeOutput(o)));
+      return this.outputs.length - 1;
+    }
+    updateOutput(idx, output, _ignoreSignStatus = false) {
+      this.checkOutputIdx(idx);
+      let allowedFields = void 0;
+      if (!_ignoreSignStatus) {
+        const status = this.signStatus();
+        if (!status.addOutput || status.outputs.includes(idx))
+          allowedFields = PSBTOutputUnsignedKeys;
+      }
+      this.outputs[idx] = cloneDeep(this.normalizeOutput(output, this.outputs[idx], allowedFields));
+    }
+    addOutputAddress(address, amount, network = NETWORK) {
+      return this.addOutput({
+        // Address.decode() only returns recognized descriptors here, but its wrapped output type
+        // still carries `undefined` for coder parity, so narrow before feeding OutScript.encode().
+        script: OutScript.encode(Address(network).decode(address)),
+        amount
+      });
+    }
+    // Utils
+    get fee() {
+      let res = 0n;
+      for (const i of this.inputs) {
+        const prevOut = getPrevOut(i);
+        if (!prevOut)
+          throw new Error("Empty input amount");
+        res += prevOut.amount;
+      }
+      const outputs = this.outputs.map(outputBeforeSign);
+      for (const o of outputs)
+        res -= o.amount;
+      return res;
+    }
+    // Signing
+    // Based on https://github.com/bitcoin/bitcoin/blob/5871b5b5ab57a0caf9b7514eb162c491c83281d5/test/functional/test_framework/script.py#L624
+    // There is optimization opportunity to re-use hashes for multiple inputs for witness v0/v1,
+    // but we are trying to be less complicated for audit purpose for now.
+    preimageLegacy(idx, prevOutScript, hashType) {
+      const { isAny, isNone, isSingle } = unpackSighash(hashType);
+      if (idx < 0 || !Number.isSafeInteger(idx))
+        throw new Error(`Invalid input idx=${idx}`);
+      if (isSingle && idx >= this.outputs.length || idx >= this.inputs.length)
+        return U256BE.encode(1n);
+      prevOutScript = stripCodeSeparator(prevOutScript);
+      let inputs = this.inputs.map(inputBeforeSign).map((input, inputIdx) => ({
+        ...input,
+        finalScriptSig: inputIdx === idx ? prevOutScript : EMPTY
+      }));
+      if (isAny)
+        inputs = [inputs[idx]];
+      else if (isNone || isSingle) {
+        inputs = inputs.map((input, inputIdx) => ({
+          ...input,
+          sequence: inputIdx === idx ? input.sequence : 0
+        }));
+      }
+      let outputs = this.outputs.map(outputBeforeSign);
+      if (isNone)
+        outputs = [];
+      else if (isSingle) {
+        outputs = outputs.slice(0, idx).fill(EMPTY_OUTPUT).concat([outputs[idx]]);
+      }
+      const tmpTx = RawTx.encode({
+        lockTime: this.lockTime,
+        version: this.version,
+        segwitFlag: false,
+        inputs,
+        outputs
+      });
+      return sha256x2(tmpTx, I32LE.encode(hashType));
+    }
+    preimageWitnessV0(idx, prevOutScript, hashType, amount) {
+      if (idx < 0 || !Number.isSafeInteger(idx) || idx >= this.inputs.length)
+        throw new Error(`Invalid input idx=${idx}`);
+      const { isAny, isNone, isSingle } = unpackSighash(hashType);
+      let inputHash = EMPTY32;
+      let sequenceHash = EMPTY32;
+      let outputHash = EMPTY32;
+      const inputs = this.inputs.map(inputBeforeSign);
+      const outputs = this.outputs.map(outputBeforeSign);
+      if (!isAny)
+        inputHash = sha256x2(...inputs.map(TxHashIdx.encode));
+      if (!isAny && !isSingle && !isNone)
+        sequenceHash = sha256x2(...inputs.map((i) => U32LE.encode(i.sequence)));
+      if (!isSingle && !isNone) {
+        outputHash = sha256x2(...outputs.map(RawOutput.encode));
+      } else if (isSingle && idx < outputs.length)
+        outputHash = sha256x2(RawOutput.encode(outputs[idx]));
+      const input = inputs[idx];
+      return sha256x2(I32LE.encode(this.version), inputHash, sequenceHash, createBytes(32, true).encode(input.txid), U32LE.encode(input.index), VarBytes.encode(prevOutScript), U64LE.encode(amount), U32LE.encode(input.sequence), outputHash, U32LE.encode(this.lockTime), U32LE.encode(hashType));
+    }
+    preimageWitnessV1(idx, prevOutScript, hashType, amount, codeSeparator = -1, leafScript, leafVer = 192, annex) {
+      if (!Array.isArray(amount) || this.inputs.length !== amount.length)
+        throw new Error(`Invalid amounts array=${amount}`);
+      if (!Array.isArray(prevOutScript) || this.inputs.length !== prevOutScript.length)
+        throw new Error(`Invalid prevOutScript array=${prevOutScript}`);
+      if (idx < 0 || !Number.isSafeInteger(idx) || idx >= this.inputs.length)
+        throw new Error(`Invalid input idx=${idx}`);
+      const out = [
+        U8.encode(0),
+        U8.encode(hashType),
+        // U8 sigHash
+        I32LE.encode(this.version),
+        U32LE.encode(this.lockTime)
+      ];
+      const outType = hashType === SignatureHash.DEFAULT ? SignatureHash.ALL : hashType & 3;
+      const inType = hashType & SignatureHash.ANYONECANPAY;
+      const inputs = this.inputs.map(inputBeforeSign);
+      const outputs = this.outputs.map(outputBeforeSign);
+      if (inType !== SignatureHash.ANYONECANPAY) {
+        out.push(...[
+          inputs.map(TxHashIdx.encode),
+          amount.map(U64LE.encode),
+          prevOutScript.map(VarBytes.encode),
+          inputs.map((i) => U32LE.encode(i.sequence))
+        ].map((i) => sha2562(concatBytes4(...i))));
+      }
+      if (outType === SignatureHash.ALL) {
+        out.push(sha2562(concatBytes4(...outputs.map(RawOutput.encode))));
+      }
+      const spendType = (annex ? 1 : 0) | (leafScript ? 2 : 0);
+      out.push(new Uint8Array([spendType]));
+      if (inType === SignatureHash.ANYONECANPAY) {
+        const inp = inputs[idx];
+        out.push(TxHashIdx.encode(inp), U64LE.encode(amount[idx]), VarBytes.encode(prevOutScript[idx]), U32LE.encode(inp.sequence));
+      } else
+        out.push(U32LE.encode(idx));
+      if (spendType & 1)
+        out.push(sha2562(VarBytes.encode(annex || EMPTY)));
+      if (outType === SignatureHash.SINGLE)
+        out.push(idx < outputs.length ? sha2562(RawOutput.encode(outputs[idx])) : EMPTY32);
+      if (leafScript)
+        out.push(tapLeafHash(leafScript, leafVer), U8.encode(0), I32LE.encode(codeSeparator));
+      return tagSchnorr("TapSighash", ...out);
+    }
+    // Signer can be privateKey OR instance of bip32 HD stuff
+    signIdx(privateKey, idx, allowedSighash, _auxRand) {
+      this.checkInputIdx(idx);
+      const input = this.inputs[idx];
+      const inputType = getInputType(input, this.opts.allowLegacyWitnessUtxo);
+      const canSign = (privateKey2) => {
+        if (inputType.txType === "taproot") {
+          const pubKey2 = pubSchnorr(privateKey2);
+          if (input.tapInternalKey && equalBytes3(pubKey2, input.tapInternalKey))
+            return true;
+          if (!input.tapLeafScript)
+            return false;
+          for (const [_, leaf] of input.tapLeafScript) {
+            for (const op of Script.decode(leaf.subarray(0, -1))) {
+              if (isBytes5(op) && equalBytes3(op, pubKey2))
+                return true;
+            }
+          }
+          return false;
+        }
+        const pubKey = pubECDSA(privateKey2);
+        const pubKeyHash = hash1602(pubKey);
+        for (const op of Script.decode(inputType.lastScript)) {
+          if (isBytes5(op) && (equalBytes3(op, pubKey) || equalBytes3(op, pubKeyHash)))
+            return true;
+        }
+        return false;
+      };
+      if (!isBytes5(privateKey)) {
+        const root = privateKey;
+        const deriveSigners = (label, rows, pubKey) => {
+          if (!rows || !rows.length)
+            throw new Error(`${label}: empty`);
+          const signers2 = rows.filter((row) => row.fingerprint == root.fingerprint).map((row) => {
+            let s = root;
+            for (const i of row.path)
+              s = s.deriveChild(i);
+            if (!equalBytes3(pubKey(s), row.pubKey))
+              throw new Error(`${label}: wrong pubKey`);
+            if (!s.privateKey)
+              throw new Error(`${label}: no privateKey`);
+            return s;
+          });
+          if (!signers2.length)
+            throw new Error(`${label}: no items with fingerprint=${root.fingerprint}`);
+          return signers2;
+        };
+        const signers = inputType.txType === "taproot" ? (
+          // BIP371 PSBT_IN_TAP_BIP32_DERIVATION stores x-only pubkeys plus `der`, so taproot HD
+          // signing must derive against that map instead of legacy bip32Derivation.
+          deriveSigners("tapBip32Derivation", input.tapBip32Derivation?.map(([pubKey, { der }]) => ({
+            pubKey,
+            fingerprint: der.fingerprint,
+            path: der.path
+          })), (s) => s.publicKey.slice(1))
+        ) : deriveSigners("bip32Derivation", input.bip32Derivation?.map(([pubKey, der]) => ({
+          pubKey,
+          fingerprint: der.fingerprint,
+          path: der.path
+        })), (s) => s.publicKey);
+        let signed = false;
+        for (const s of signers) {
+          if (!canSign(s.privateKey))
+            continue;
+          if (this.signIdx(s.privateKey, idx, allowedSighash, _auxRand))
+            signed = true;
+        }
+        if (signed)
+          return true;
+        if (inputType.txType === "taproot")
+          throw new Error("No taproot scripts signed");
+        throw new Error(`Input script doesn't have pubKey: ${inputType.lastScript}`);
+      }
+      if (!allowedSighash)
+        allowedSighash = [inputType.defaultSighash];
+      else
+        allowedSighash.forEach(validateSigHash);
+      const sighash = inputType.sighash;
+      if (!allowedSighash.includes(sighash)) {
+        throw new Error(`Input with not allowed sigHash=${sighash}. Allowed: ${allowedSighash.join(", ")}`);
+      }
+      const { sigOutputs } = this.inputSighash(idx);
+      if (sigOutputs === SignatureHash.SINGLE && idx >= this.outputs.length) {
+        throw new Error(`Input with sighash SINGLE, but there is no output with corresponding index=${idx}`);
+      }
+      const prevOut = getPrevOut(input);
+      if (inputType.txType === "taproot") {
+        const prevOuts = this.inputs.map(getPrevOut);
+        const prevOutScript = prevOuts.map((i) => i.script);
+        const amount = prevOuts.map((i) => i.amount);
+        let signed = false;
+        let schnorrPub = pubSchnorr(privateKey);
+        let merkleRoot = input.tapMerkleRoot || EMPTY;
+        if (input.tapInternalKey) {
+          const { pubKey, privKey } = getTaprootKeys(privateKey, schnorrPub, input.tapInternalKey, merkleRoot);
+          const [taprootPubKey, _] = taprootTweakPubkey(input.tapInternalKey, merkleRoot);
+          if (equalBytes3(taprootPubKey, pubKey)) {
+            const hash = this.preimageWitnessV1(idx, prevOutScript, sighash, amount);
+            const sig = concatBytes4(signSchnorr(hash, privKey, _auxRand), sighash !== SignatureHash.DEFAULT ? new Uint8Array([sighash]) : EMPTY);
+            this.updateInput(idx, { tapKeySig: sig }, true);
+            signed = true;
+          }
+        }
+        if (input.tapLeafScript) {
+          input.tapScriptSig = input.tapScriptSig || [];
+          for (const [_, _script] of input.tapLeafScript) {
+            const script = _script.subarray(0, -1);
+            const scriptDecoded = Script.decode(script);
+            const ver = _script[_script.length - 1];
+            const hash = tapLeafHash(script, ver);
+            const pos = scriptDecoded.findIndex((i) => isBytes5(i) && equalBytes3(i, schnorrPub));
+            if (pos === -1)
+              continue;
+            const msg = this.preimageWitnessV1(idx, prevOutScript, sighash, amount, void 0, script, ver);
+            const sig = concatBytes4(signSchnorr(msg, privateKey, _auxRand), sighash !== SignatureHash.DEFAULT ? new Uint8Array([sighash]) : EMPTY);
+            this.updateInput(idx, { tapScriptSig: [[{ pubKey: schnorrPub, leafHash: hash }, sig]] }, true);
+            signed = true;
+          }
+        }
+        if (!signed)
+          throw new Error("No taproot scripts signed");
+        return true;
+      } else {
+        const pubKey = pubECDSA(privateKey);
+        let hasPubkey = false;
+        const pubKeyHash = hash1602(pubKey);
+        for (const i of Script.decode(inputType.lastScript)) {
+          if (isBytes5(i) && (equalBytes3(i, pubKey) || equalBytes3(i, pubKeyHash)))
+            hasPubkey = true;
+        }
+        if (!hasPubkey)
+          throw new Error(`Input script doesn't have pubKey: ${inputType.lastScript}`);
+        let hash;
+        if (inputType.txType === "legacy") {
+          hash = this.preimageLegacy(idx, inputType.lastScript, sighash);
+        } else if (inputType.txType === "segwit") {
+          let script = inputType.lastScript;
+          if (inputType.last.type === "wpkh")
+            script = OutScript.encode({ type: "pkh", hash: inputType.last.hash });
+          hash = this.preimageWitnessV0(idx, script, sighash, prevOut.amount);
+        } else
+          throw new Error(`Transaction/sign: unknown tx type: ${inputType.txType}`);
+        const sig = signECDSA(hash, privateKey, this.opts.lowR);
+        this.updateInput(idx, {
+          partialSig: [[pubKey, concatBytes4(sig, new Uint8Array([sighash]))]]
+        }, true);
+      }
+      return true;
+    }
+    // This is bad API. Will work if user creates and signs tx, but if
+    // there is some complex workflow with exchanging PSBT and signing them,
+    // then it is better to validate which output user signs. How could a better API look like?
+    // Example: user adds input, sends to another party, then signs received input (mixer etc),
+    // another user can add different input for same key and user will sign it.
+    // Even worse: another user can add bip32 derivation, and spend money from different address.
+    // Better api: signIdx
+    sign(privateKey, allowedSighash, _auxRand) {
+      let num2 = 0;
+      for (let i = 0; i < this.inputs.length; i++) {
+        try {
+          if (this.signIdx(privateKey, i, allowedSighash, _auxRand))
+            num2++;
+        } catch (e) {
+        }
+      }
+      if (!num2)
+        throw new Error("No inputs signed");
+      return num2;
+    }
+    finalizeIdx(idx) {
+      this.checkInputIdx(idx);
+      if (this.fee < 0n)
+        throw new Error("Outputs spends more than inputs amount");
+      const input = this.inputs[idx];
+      const inputType = getInputType(input, this.opts.allowLegacyWitnessUtxo);
+      if (inputType.txType === "taproot") {
+        if (input.tapKeySig)
+          input.finalScriptWitness = [input.tapKeySig];
+        else if (input.tapLeafScript && input.tapScriptSig) {
+          const leafs = input.tapLeafScript.sort((a, b) => TaprootControlBlock.encode(a[0]).length - TaprootControlBlock.encode(b[0]).length);
+          for (const [cb, _script] of leafs) {
+            const script = _script.slice(0, -1);
+            const ver = _script[_script.length - 1];
+            const outScript = OutScript.decode(script);
+            const hash = tapLeafHash(script, ver);
+            const scriptSig = input.tapScriptSig.filter((i) => equalBytes3(i[0].leafHash, hash));
+            let signatures = [];
+            if (outScript.type === "tr_ms") {
+              const m = outScript.m;
+              const pubkeys = outScript.pubkeys;
+              let added = 0;
+              for (const pub of pubkeys) {
+                const sigIdx = scriptSig.findIndex((i) => equalBytes3(i[0].pubKey, pub));
+                if (added === m || sigIdx === -1) {
+                  signatures.push(EMPTY);
+                  continue;
+                }
+                signatures.push(scriptSig[sigIdx][1]);
+                added++;
+              }
+              if (added !== m)
+                continue;
+            } else if (outScript.type === "tr_ns") {
+              for (const pub of outScript.pubkeys) {
+                const sigIdx = scriptSig.findIndex((i) => equalBytes3(i[0].pubKey, pub));
+                if (sigIdx === -1)
+                  continue;
+                signatures.push(scriptSig[sigIdx][1]);
+              }
+              if (signatures.length !== outScript.pubkeys.length)
+                continue;
+            } else if (outScript.type === "unknown" && this.opts.allowUnknownInputs) {
+              const scriptDecoded = Script.decode(script);
+              signatures = scriptSig.map(([{ pubKey }, signature]) => {
+                const pos = scriptDecoded.findIndex((i) => isBytes5(i) && equalBytes3(i, pubKey));
+                if (pos === -1)
+                  throw new Error("finalize/taproot: cannot find position of pubkey in script");
+                return { signature, pos };
+              }).sort((a, b) => a.pos - b.pos).map((i) => i.signature);
+              if (!signatures.length)
+                continue;
+            } else {
+              const custom = this.opts.customScripts;
+              if (custom) {
+                for (const c of custom) {
+                  if (!c.finalizeTaproot)
+                    continue;
+                  const scriptDecoded = Script.decode(script);
+                  const csEncoded = c.encode(scriptDecoded);
+                  if (csEncoded === void 0)
+                    continue;
+                  const finalized = c.finalizeTaproot(script, csEncoded, scriptSig);
+                  if (!finalized)
+                    continue;
+                  input.finalScriptWitness = finalized.concat(TaprootControlBlock.encode(cb));
+                  delete input.finalScriptSig;
+                  cleanFinalInput(input);
+                  return;
+                }
+              }
+              throw new Error("Finalize: Unknown tapLeafScript");
+            }
+            input.finalScriptWitness = signatures.reverse().concat([script, TaprootControlBlock.encode(cb)]);
+            break;
+          }
+          if (!input.finalScriptWitness)
+            throw new Error("finalize/taproot: empty witness");
+        } else
+          throw new Error("finalize/taproot: unknown input");
+        delete input.finalScriptSig;
+        cleanFinalInput(input);
+        return;
+      }
+      if (!input.partialSig || !input.partialSig.length)
+        throw new Error("Not enough partial sign");
+      let inputScript = EMPTY;
+      let witness = [];
+      if (inputType.last.type === "ms") {
+        const m = inputType.last.m;
+        const pubkeys = inputType.last.pubkeys;
+        let signatures = [];
+        for (const pub of pubkeys) {
+          const sign = input.partialSig.find((s) => equalBytes3(pub, s[0]));
+          if (!sign)
+            continue;
+          signatures.push(sign[1]);
+        }
+        signatures = signatures.slice(0, m);
+        if (signatures.length !== m) {
+          throw new Error(`Multisig: wrong signatures count, m=${m} n=${pubkeys.length} signatures=${signatures.length}`);
+        }
+        inputScript = Script.encode([0, ...signatures]);
+      } else if (inputType.last.type === "pk") {
+        inputScript = Script.encode([input.partialSig[0][1]]);
+      } else if (inputType.last.type === "pkh") {
+        inputScript = Script.encode([input.partialSig[0][1], input.partialSig[0][0]]);
+      } else if (inputType.last.type === "wpkh") {
+        inputScript = EMPTY;
+        witness = [input.partialSig[0][1], input.partialSig[0][0]];
+      } else if (inputType.last.type === "unknown" && !this.opts.allowUnknownInputs)
+        throw new Error("Unknown inputs not allowed");
+      let finalScriptSig, finalScriptWitness;
+      if (inputType.type.includes("wsh-")) {
+        if (inputScript.length && inputType.lastScript.length) {
+          witness = Script.decode(inputScript).map((i) => {
+            if (i === 0)
+              return EMPTY;
+            if (isBytes5(i))
+              return i;
+            throw new Error(`Wrong witness op=${i}`);
+          });
+        }
+        witness = witness.concat(inputType.lastScript);
+      }
+      if (inputType.txType === "segwit")
+        finalScriptWitness = witness;
+      if (inputType.type.startsWith("sh-wsh-")) {
+        finalScriptSig = Script.encode([Script.encode([0, sha2562(inputType.lastScript)])]);
+      } else if (inputType.type.startsWith("sh-")) {
+        finalScriptSig = Script.encode([...Script.decode(inputScript), inputType.lastScript]);
+      } else if (inputType.type.startsWith("wsh-")) {
+      } else if (inputType.txType !== "segwit")
+        finalScriptSig = inputScript;
+      if (!finalScriptSig && !finalScriptWitness)
+        throw new Error("Unknown error finalizing input");
+      if (finalScriptSig)
+        input.finalScriptSig = finalScriptSig;
+      if (finalScriptWitness)
+        input.finalScriptWitness = finalScriptWitness;
+      cleanFinalInput(input);
+    }
+    finalize() {
+      for (let i = 0; i < this.inputs.length; i++)
+        this.finalizeIdx(i);
+    }
+    extract() {
+      if (!this.isFinal)
+        throw new Error("Transaction has unfinalized inputs");
+      if (!this.outputs.length)
+        throw new Error("Transaction has no outputs");
+      if (this.fee < 0n)
+        throw new Error("Outputs spends more than inputs amount");
+      return this.toBytes(true, true);
+    }
+    combine(other) {
+      const PSBTVersion = Math.max(this.opts.PSBTVersion || 0, other.opts.PSBTVersion || 0);
+      for (const k of ["version", "lockTime"]) {
+        if (this.opts[k] !== other.opts[k]) {
+          throw new Error(`Transaction/combine: different ${k} this=${this.opts[k]} other=${other.opts[k]}`);
+        }
+      }
+      for (const k of ["inputs", "outputs"]) {
+        if (this[k].length !== other[k].length) {
+          throw new Error(`Transaction/combine: different ${k} length this=${this[k].length} other=${other[k].length}`);
+        }
+      }
+      if (!equalBytes3(this.unsignedTx, other.unsignedTx))
+        throw new Error(`Transaction/combine: different unsigned tx`);
+      this.global = mergeKeyMap(PSBTGlobal, this.global, other.global, void 0, this.opts.allowUnknown);
+      if (PSBTVersion)
+        this.global.version = PSBTVersion;
+      for (let i = 0; i < this.inputs.length; i++)
+        this.updateInput(i, other.inputs[i], true);
+      for (let i = 0; i < this.outputs.length; i++)
+        this.updateOutput(i, other.outputs[i], true);
+      return this;
+    }
+    clone() {
+      return _Transaction.fromPSBT(this.toPSBT(), this.opts);
+    }
+  };
+
   // node_modules/@scure/btc-signer/musig2.js
   var InvalidContributionErr = class extends Error {
     // BIP327 identifiable aborts blame exactly one signer by participant index in the
@@ -5796,7 +7802,7 @@
   var taggedHash2 = /* @__PURE__ */ (() => schnorr.utils.taggedHash)();
   var pointToBytes2 = /* @__PURE__ */ (() => schnorr.utils.pointToBytes)();
   var Point3 = /* @__PURE__ */ (() => secp256k1.Point)();
-  var Fn2 = /* @__PURE__ */ (() => Point3.Fn)();
+  var Fn3 = /* @__PURE__ */ (() => Point3.Fn)();
   var PUBKEY_LEN = /* @__PURE__ */ (() => secp256k1.lengths.publicKey)();
   var ZERO = /* @__PURE__ */ new Uint8Array(PUBKEY_LEN);
   function abytesArray(lst, ...lengths) {
@@ -5812,7 +7818,7 @@
         throw new TypeError("expected boolean in xOnly array, got" + i + "(" + j + ")");
     });
   }
-  var taggedInt = (tag, ...messages) => Fn2.create(Fn2.fromBytes(taggedHash2(tag, ...messages), true));
+  var taggedInt = (tag, ...messages) => Fn3.create(Fn3.fromBytes(taggedHash2(tag, ...messages), true));
   function mulBase(n) {
     return Point3.BASE.multiply(n);
   }
@@ -5863,18 +7869,18 @@
       }
       aggPublicKey = aggPublicKey.add(Pi.multiply(keyAggCoeffInternal(publicKeys[i], pk2, L)));
     }
-    let gAcc = Fn2.ONE;
-    let tweakAcc = Fn2.ZERO;
+    let gAcc = Fn3.ONE;
+    let tweakAcc = Fn3.ZERO;
     for (let i = 0; i < tweaks.length; i++) {
-      const g = isXonly[i] && !hasEven2(aggPublicKey.y) ? Fn2.neg(Fn2.ONE) : Fn2.ONE;
-      const t = Fn2.fromBytes(tweaks[i], true);
-      if (!Fn2.isValid(t))
+      const g = isXonly[i] && !hasEven2(aggPublicKey.y) ? Fn3.neg(Fn3.ONE) : Fn3.ONE;
+      const t = Fn3.fromBytes(tweaks[i], true);
+      if (!Fn3.isValid(t))
         throw new RangeError("invalid scalar: out of range");
-      aggPublicKey = aggPublicKey.multiply(g).add(Fn2.is0(t) ? Point3.ZERO : mulBase(t));
+      aggPublicKey = aggPublicKey.multiply(g).add(Fn3.is0(t) ? Point3.ZERO : mulBase(t));
       if (isZero(aggPublicKey))
         throw new Error("The result of tweaking cannot be infinity");
-      gAcc = Fn2.mul(g, gAcc);
-      tweakAcc = Fn2.add(t, Fn2.mul(g, tweakAcc));
+      gAcc = Fn3.mul(g, gAcc);
+      tweakAcc = Fn3.add(t, Fn3.mul(g, tweakAcc));
     }
     return { aggPublicKey, gAcc, tweakAcc };
   }
@@ -5898,12 +7904,17 @@
   var elements = {
     recoverButton: document.querySelector("#recoverButton"),
     importDumpButton: document.querySelector("#importDumpButton"),
+    buildSweepButton: document.querySelector("#buildSweepButton"),
+    broadcastSweepButton: document.querySelector("#broadcastSweepButton"),
     originStatus: document.querySelector("#originStatus"),
     message: document.querySelector("#message"),
     recoveryBundle: document.querySelector("#recoveryBundle"),
+    sweepAddress: document.querySelector("#sweepAddress"),
+    feeRate: document.querySelector("#feeRate"),
     metadataStatus: document.querySelector("#metadataStatus"),
     recoveryOutput: document.querySelector("#recoveryOutput"),
     utxoOutput: document.querySelector("#utxoOutput"),
+    sweepOutput: document.querySelector("#sweepOutput"),
     bitcoinAddress: document.querySelector("#bitcoinAddress"),
     bitcoinPrivateKey: document.querySelector("#bitcoinPrivateKey"),
     bitcoinPublicKey: document.querySelector("#bitcoinPublicKey"),
@@ -5912,6 +7923,8 @@
     ethereumPublicKey: document.querySelector("#ethereumPublicKey"),
     exportJson: document.querySelector("#exportJson")
   };
+  var lastSweepContext = null;
+  var lastSweepTransaction = null;
   function utf82(value) {
     return new TextEncoder().encode(value);
   }
@@ -6157,6 +8170,30 @@
       leafVersion: 192
     };
   }
+  function serializeTapLeafScript(tapLeafScript) {
+    if (!Array.isArray(tapLeafScript)) return [];
+    return tapLeafScript.map(([controlBlock, scriptWithVersion]) => ({
+      controlBlock: {
+        version: controlBlock.version,
+        internalKeyHex: bytesToHex3(controlBlock.internalKey),
+        merklePathHex: (controlBlock.merklePath || []).map(bytesToHex3)
+      },
+      scriptHex: bytesToHex3(scriptWithVersion)
+    }));
+  }
+  function hydrateTapLeafScript(tapLeafScript) {
+    if (!Array.isArray(tapLeafScript) || !tapLeafScript.length) {
+      throw new Error("Taproot leaf script is missing from CSV candidate.");
+    }
+    return tapLeafScript.map((entry) => [
+      {
+        version: entry.controlBlock.version,
+        internalKey: hexToBytes3(entry.controlBlock.internalKeyHex),
+        merklePath: (entry.controlBlock.merklePathHex || []).map(hexToBytes3)
+      },
+      hexToBytes3(entry.scriptHex)
+    ]);
+  }
   function buildLegacyCsvCandidate({ id, label, clientPk33, serverPk33, csvBlocks }) {
     const aggregated = aggregateMuSig2Keys(clientPk33, serverPk33);
     const clientXOnly = hexToBytes3(clientPk33.slice(2));
@@ -6186,6 +8223,7 @@
       tapInternalKeyHex: aggregated.xOnlyHex,
       tapMerkleRootHex: p2tr2.tapMerkleRoot ? bytesToHex3(p2tr2.tapMerkleRoot) : "",
       tweakedPubkeyHex: tweakedPubkey ? bytesToHex3(tweakedPubkey) : "",
+      tapLeafScript: serializeTapLeafScript(p2tr2.tapLeafScript),
       tapLeafScriptPresent: Array.isArray(p2tr2.tapLeafScript) && p2tr2.tapLeafScript.length > 0
     };
   }
@@ -6235,6 +8273,7 @@
       tapInternalKeyHex: internalXonly32,
       tapMerkleRootHex: p2tr2.tapMerkleRoot ? bytesToHex3(p2tr2.tapMerkleRoot) : "",
       tweakedPubkeyHex: tweakedPubkey ? bytesToHex3(tweakedPubkey) : "",
+      tapLeafScript: serializeTapLeafScript(p2tr2.tapLeafScript),
       tapLeafScriptPresent: Array.isArray(p2tr2.tapLeafScript) && p2tr2.tapLeafScript.length > 0
     };
   }
@@ -6318,6 +8357,7 @@
     elements.metadataStatus.textContent = "No server lookup yet.";
     elements.recoveryOutput.value = "";
     elements.utxoOutput.value = "";
+    elements.sweepOutput.value = "";
     elements.bitcoinAddress.value = "";
     elements.bitcoinPrivateKey.value = "";
     elements.bitcoinPublicKey.value = "";
@@ -6325,6 +8365,8 @@
     elements.ethereumPrivateKey.value = "";
     elements.ethereumPublicKey.value = "";
     elements.exportJson.value = "";
+    lastSweepContext = null;
+    lastSweepTransaction = null;
   }
   function prfEvalInput() {
     return {
@@ -6916,6 +8958,8 @@ CSV: ${candidate.csv.value} blocks`).join("\n\n");
       (sum, result) => sum + (result.ok ? result.utxos.length : 0),
       0
     );
+    lastSweepContext = imported;
+    lastSweepTransaction = null;
     elements.metadataStatus.textContent = `${imported.csvCandidates.length} CSV address candidate(s) imported from dump. ${totalUtxos} UTXO(s) found.`;
     elements.recoveryOutput.value = JSON.stringify(
       {
@@ -6943,6 +8987,201 @@ ${imported.bitcoinKey.userXonly32}` : "not available in dump";
     elements.ethereumPrivateKey.value = "not available from this Bitcoin dump";
     elements.ethereumPublicKey.value = "not available from this Bitcoin dump";
     elements.exportJson.value = JSON.stringify(imported, null, 2);
+  }
+  function parseFeeRate() {
+    const feeRate = Number(elements.feeRate.value);
+    if (!Number.isFinite(feeRate) || feeRate <= 0 || feeRate > 1e3) {
+      throw new Error("Fee rate must be between 1 and 1000 sat/vB.");
+    }
+    return feeRate;
+  }
+  function candidateKey(candidate) {
+    return `${candidate.address}|${candidate.csv?.type || ""}|${candidate.csv?.value || ""}`;
+  }
+  function collectSweepInputs(context) {
+    if (!context?.bitcoinKey?.privateKeyHex) {
+      throw new Error("The imported dump does not contain a Bitcoin private key for signing.");
+    }
+    if (!context.bitcoinKey.matchesCsvUserKey) {
+      throw new Error("The imported Bitcoin private key does not match the CSV user key.");
+    }
+    const candidateMap = new Map((context.csvCandidates || []).map((candidate) => [candidateKey(candidate), candidate]));
+    const inputs = [];
+    for (const result of context.utxoLookup?.results || []) {
+      if (!result.ok) continue;
+      const candidate = candidateMap.get(`${result.address}|${result.csv?.type || ""}|${result.csv?.value || ""}`);
+      if (!candidate) continue;
+      if (candidate.clientXonly32 !== stripHexPrefix(context.bitcoinKey.userXonly32)) continue;
+      for (const utxo of result.utxos || []) {
+        const status = csvStatus(utxo, result.csv, context.utxoLookup.tipHeight);
+        inputs.push({
+          candidate,
+          utxo,
+          status,
+          valueSats: Math.max(0, Math.trunc(Number(utxo.value) || 0))
+        });
+      }
+    }
+    if (!inputs.length) {
+      throw new Error("No signable CSV UTXOs were found for the imported dump.");
+    }
+    return inputs;
+  }
+  function addSweepInputs(tx, sweepInputs) {
+    for (const input of sweepInputs) {
+      const candidate = input.candidate;
+      if (!candidate.scriptPubKeyHex || !candidate.tapInternalKeyHex || !candidate.tapMerkleRootHex) {
+        throw new Error(`CSV candidate ${candidate.label} is missing Taproot signing metadata.`);
+      }
+      tx.addInput({
+        txid: input.utxo.txid,
+        index: input.utxo.vout,
+        sequence: candidate.csv?.sequence || candidate.csv?.value,
+        witnessUtxo: {
+          script: hexToBytes3(candidate.scriptPubKeyHex),
+          amount: BigInt(input.valueSats)
+        },
+        tapInternalKey: hexToBytes3(candidate.tapInternalKeyHex),
+        tapMerkleRoot: hexToBytes3(candidate.tapMerkleRootHex),
+        tapLeafScript: hydrateTapLeafScript(candidate.tapLeafScript)
+      });
+    }
+  }
+  function signSweepTx({ sweepInputs, destinationAddress, outputSats, privateKeyHex }) {
+    const tx = new Transaction({ version: 2, allowUnknownInputs: true });
+    addSweepInputs(tx, sweepInputs);
+    tx.addOutputAddress(destinationAddress, BigInt(outputSats), NETWORK);
+    const privateKey = hexToBytes3(privateKeyHex);
+    for (let index = 0; index < sweepInputs.length; index += 1) {
+      tx.signIdx(privateKey, index);
+    }
+    tx.finalize();
+    return tx;
+  }
+  function buildSweepTransaction(context) {
+    const destinationAddress = elements.sweepAddress.value.trim();
+    if (!destinationAddress) {
+      throw new Error("Enter a Bitcoin destination address first.");
+    }
+    const feeRate = parseFeeRate();
+    const sweepInputs = collectSweepInputs(context);
+    const privateKeyHex = stripHexPrefix(context.bitcoinKey.privateKeyHex);
+    const totalSats = sweepInputs.reduce((sum, input) => sum + input.valueSats, 0);
+    const probeTx = signSweepTx({
+      sweepInputs,
+      destinationAddress,
+      outputSats: 1,
+      privateKeyHex
+    });
+    const feeSats = Math.ceil(probeTx.vsize * feeRate);
+    const outputSats = totalSats - feeSats;
+    if (outputSats <= 546) {
+      throw new Error(`Fee ${feeSats} sats leaves only ${outputSats} sats; lower the fee rate or wait for more funds.`);
+    }
+    const tx = signSweepTx({
+      sweepInputs,
+      destinationAddress,
+      outputSats,
+      privateKeyHex
+    });
+    const latestUnlockHeight = sweepInputs.reduce(
+      (max, input) => Math.max(max, Number(input.status.unlockHeight) || 0),
+      0
+    );
+    const maxBlocksRemaining = sweepInputs.reduce(
+      (max, input) => Math.max(max, Number(input.status.blocksRemaining) || 0),
+      0
+    );
+    const broadcastableNow = sweepInputs.every((input) => input.status.movableAlone);
+    return {
+      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+      destinationAddress,
+      inputCount: sweepInputs.length,
+      totalInputSats: totalSats,
+      outputSats,
+      feeSats,
+      feeRateSatVb: feeRate,
+      vsize: tx.vsize,
+      txid: tx.id,
+      rawTxHex: tx.hex,
+      broadcastableNow,
+      latestUnlockHeight: latestUnlockHeight || null,
+      blocksRemaining: maxBlocksRemaining,
+      inputs: sweepInputs.map((input) => ({
+        txid: input.utxo.txid,
+        vout: input.utxo.vout,
+        valueSats: input.valueSats,
+        address: input.candidate.address,
+        csvBlocks: input.candidate.csv.value,
+        confirmedHeight: input.utxo.status?.block_height || null,
+        unlockHeight: input.status.unlockHeight || null,
+        blocksRemaining: input.status.blocksRemaining ?? null,
+        movableAlone: input.status.movableAlone,
+        detail: input.status.detail
+      }))
+    };
+  }
+  function renderSweepTransaction(sweep) {
+    const lines = [
+      `Destination: ${sweep.destinationAddress}`,
+      `Inputs: ${sweep.inputCount}`,
+      `Input total: ${sweep.totalInputSats} sats (${satsToBtc(sweep.totalInputSats)})`,
+      `Output amount: ${sweep.outputSats} sats (${satsToBtc(sweep.outputSats)})`,
+      `Fee: ${sweep.feeSats} sats (${sweep.feeRateSatVb} sat/vB, vsize ${sweep.vsize})`,
+      `TXID: ${sweep.txid}`,
+      sweep.broadcastableNow ? "Broadcast status: ready now" : `Broadcast status: wait until height ${sweep.latestUnlockHeight || "unknown"} (${sweep.blocksRemaining || "unknown"} blocks remaining)`,
+      "",
+      "Raw transaction hex:",
+      sweep.rawTxHex
+    ];
+    elements.sweepOutput.value = lines.join("\n");
+    elements.exportJson.value = JSON.stringify(
+      {
+        ...JSON.parse(elements.exportJson.value || "{}"),
+        sweepTransaction: sweep
+      },
+      null,
+      2
+    );
+  }
+  async function buildSweep() {
+    try {
+      if (!lastSweepContext) {
+        throw new Error("Import a dump with UTXOs before building a sweep transaction.");
+      }
+      setMessage("Building signed CSV sweep transaction...", "neutral");
+      const sweep = buildSweepTransaction(lastSweepContext);
+      lastSweepTransaction = sweep;
+      renderSweepTransaction(sweep);
+      setMessage(
+        sweep.broadcastableNow ? "Signed sweep transaction is ready to broadcast." : "Signed sweep transaction built. Wait for CSV unlock before broadcasting.",
+        sweep.broadcastableNow ? "success" : "neutral"
+      );
+    } catch (error) {
+      lastSweepTransaction = null;
+      setMessage(error.message || String(error), "error");
+    }
+  }
+  async function broadcastSweep() {
+    try {
+      if (!lastSweepTransaction?.rawTxHex) {
+        throw new Error("Build a signed sweep transaction first.");
+      }
+      if (!lastSweepTransaction.broadcastableNow) {
+        throw new Error(
+          `CSV is still locked. Wait until height ${lastSweepTransaction.latestUnlockHeight || "unknown"} before broadcasting.`
+        );
+      }
+      setMessage("Broadcasting signed transaction...", "neutral");
+      const result = await postJson("/api/broadcast", { rawTx: lastSweepTransaction.rawTxHex });
+      elements.sweepOutput.value = `${elements.sweepOutput.value}
+
+Broadcast result:
+${JSON.stringify(result, null, 2)}`;
+      setMessage(`Broadcasted transaction ${result.txid}.`, "success");
+    } catch (error) {
+      setMessage(error.message || String(error), "error");
+    }
   }
   async function renderOutputs(result) {
     const bitcoin = deriveBitcoinKeypair(result.prf);
@@ -7043,6 +9282,8 @@ ${imported.bitcoinKey.userXonly32}` : "not available in dump";
   }
   elements.recoverButton.addEventListener("click", recover);
   elements.importDumpButton.addEventListener("click", importDump);
+  elements.buildSweepButton.addEventListener("click", buildSweep);
+  elements.broadcastSweepButton.addEventListener("click", broadcastSweep);
   updateOriginStatus();
 })();
 /*! Bundled license information:

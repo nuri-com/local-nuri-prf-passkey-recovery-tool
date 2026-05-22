@@ -84,6 +84,15 @@ It then queries UTXOs for those addresses and shows:
 
 If the dump also contains `keys.bitcoinPrivateKeyHex`, the import view shows that key and checks whether it matches the CSV user key. Without that private key, dump import is watch-only.
 
+To prepare a sweep after CSV unlock:
+
+1. Paste the dump and click `Import Dump`.
+2. Enter the destination Bitcoin address and fee rate.
+3. Click `Build Sweep TX`.
+4. If every input is CSV-unlocked, click `Broadcast TX`.
+
+If an input is still locked, the tool still shows a signed raw transaction, but refuses to broadcast it until the displayed unlock height. Rebuild near the unlock time if fee conditions changed.
+
 ## Live Lookup And Fallback
 
 After the passkey returns the PRF, the browser derives the public client key and credential ID. It sends only those public identifiers to the local server, which tries:

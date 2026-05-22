@@ -165,6 +165,14 @@ function validateAddress(value) {
   return text;
 }
 
+function validateRawTx(value) {
+  const text = String(value || "").trim().toLowerCase();
+  if (!/^[0-9a-f]{20,400000}$/u.test(text) || text.length % 2 !== 0) {
+    throw new Error("rawTx must be raw transaction hex");
+  }
+  return text;
+}
+
 async function fetchJson(url, options = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), remoteTimeoutMs);
@@ -332,6 +340,35 @@ async function lookupUtxos(body) {
   };
 }
 
+async function broadcastTransaction(body) {
+  const rawTx = validateRawTx(body.rawTx || body.tx || body.hex);
+  const url = `${normalizeBaseUrl(mempoolApiBaseUrl)}/tx`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), remoteTimeoutMs);
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "text/plain"
+      },
+      body: rawTx
+    });
+    const text = (await response.text()).trim();
+    if (!response.ok) {
+      throw new Error(text || `HTTP ${response.status}`);
+    }
+    return {
+      ok: true,
+      broadcastAt: new Date().toISOString(),
+      txid: text,
+      mempoolUrl: `https://mempool.space/tx/${text}`
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function safePublicPath(pathname) {
   const decoded = decodeURIComponent(pathname);
   const normalized = decoded === "/" ? "/index.html" : decoded;
@@ -410,6 +447,15 @@ async function requestHandler(req, res) {
   if (req.method === "POST" && url.pathname === "/api/utxos") {
     try {
       sendJson(res, 200, await lookupUtxos(await parseJsonBody(req)));
+    } catch (error) {
+      sendJson(res, 400, { error: publicError(error) });
+    }
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/broadcast") {
+    try {
+      sendJson(res, 200, await broadcastTransaction(await parseJsonBody(req)));
     } catch (error) {
       sendJson(res, 400, { error: publicError(error) });
     }

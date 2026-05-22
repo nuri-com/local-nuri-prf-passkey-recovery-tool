@@ -21,9 +21,21 @@
             <span>Recovery dump, bundle, or server metadata</span>
             <textarea id="recoveryBundle" rows="11" placeholder="Paste Nuri CSV export, Arkade v4 recovery backup plaintext, public envelope, or descriptor JSON"></textarea>
           </label>
+          <label>
+            <span>Sweep destination Bitcoin address</span>
+            <input id="sweepAddress" type="text" autocomplete="off" spellcheck="false" placeholder="bc1...">
+          </label>
+          <label>
+            <span>Fee rate sat/vB</span>
+            <input id="feeRate" type="number" min="1" max="1000" step="1" value="5">
+          </label>
           <div class="buttonRow">
             <button id="recoverButton" type="button">Recover Keypairs</button>
             <button id="importDumpButton" class="secondary" type="button">Import Dump</button>
+          </div>
+          <div class="buttonRow">
+            <button id="buildSweepButton" type="button">Build Sweep TX</button>
+            <button id="broadcastSweepButton" class="secondary" type="button">Broadcast TX</button>
           </div>
         </div>
       </section>
@@ -45,6 +57,10 @@
           <label>
             <span>UTXOs and wait time</span>
             <textarea id="utxoOutput" readonly rows="12"></textarea>
+          </label>
+          <label>
+            <span>Signed sweep transaction</span>
+            <textarea id="sweepOutput" readonly rows="12"></textarea>
           </label>
           <label>
             <span>Bitcoin / CSV address</span>

@@ -22,12 +22,17 @@ const LEGACY_CSV_CANDIDATES = [
 const elements = {
   recoverButton: document.querySelector("#recoverButton"),
   importDumpButton: document.querySelector("#importDumpButton"),
+  buildSweepButton: document.querySelector("#buildSweepButton"),
+  broadcastSweepButton: document.querySelector("#broadcastSweepButton"),
   originStatus: document.querySelector("#originStatus"),
   message: document.querySelector("#message"),
   recoveryBundle: document.querySelector("#recoveryBundle"),
+  sweepAddress: document.querySelector("#sweepAddress"),
+  feeRate: document.querySelector("#feeRate"),
   metadataStatus: document.querySelector("#metadataStatus"),
   recoveryOutput: document.querySelector("#recoveryOutput"),
   utxoOutput: document.querySelector("#utxoOutput"),
+  sweepOutput: document.querySelector("#sweepOutput"),
   bitcoinAddress: document.querySelector("#bitcoinAddress"),
   bitcoinPrivateKey: document.querySelector("#bitcoinPrivateKey"),
   bitcoinPublicKey: document.querySelector("#bitcoinPublicKey"),
@@ -36,6 +41,9 @@ const elements = {
   ethereumPublicKey: document.querySelector("#ethereumPublicKey"),
   exportJson: document.querySelector("#exportJson")
 };
+
+let lastSweepContext = null;
+let lastSweepTransaction = null;
 
 function utf8(value) {
   return new TextEncoder().encode(value);
@@ -333,6 +341,32 @@ function buildLegacyCsvLeaf(userXOnly, csvBlocks) {
   };
 }
 
+function serializeTapLeafScript(tapLeafScript) {
+  if (!Array.isArray(tapLeafScript)) return [];
+  return tapLeafScript.map(([controlBlock, scriptWithVersion]) => ({
+    controlBlock: {
+      version: controlBlock.version,
+      internalKeyHex: bytesToHex(controlBlock.internalKey),
+      merklePathHex: (controlBlock.merklePath || []).map(bytesToHex)
+    },
+    scriptHex: bytesToHex(scriptWithVersion)
+  }));
+}
+
+function hydrateTapLeafScript(tapLeafScript) {
+  if (!Array.isArray(tapLeafScript) || !tapLeafScript.length) {
+    throw new Error("Taproot leaf script is missing from CSV candidate.");
+  }
+  return tapLeafScript.map((entry) => [
+    {
+      version: entry.controlBlock.version,
+      internalKey: hexToBytes(entry.controlBlock.internalKeyHex),
+      merklePath: (entry.controlBlock.merklePathHex || []).map(hexToBytes)
+    },
+    hexToBytes(entry.scriptHex)
+  ]);
+}
+
 function buildLegacyCsvCandidate({ id, label, clientPk33, serverPk33, csvBlocks }) {
   const aggregated = aggregateMuSig2Keys(clientPk33, serverPk33);
   const clientXOnly = hexToBytes(clientPk33.slice(2));
@@ -363,6 +397,7 @@ function buildLegacyCsvCandidate({ id, label, clientPk33, serverPk33, csvBlocks 
     tapInternalKeyHex: aggregated.xOnlyHex,
     tapMerkleRootHex: p2tr.tapMerkleRoot ? bytesToHex(p2tr.tapMerkleRoot) : "",
     tweakedPubkeyHex: tweakedPubkey ? bytesToHex(tweakedPubkey) : "",
+    tapLeafScript: serializeTapLeafScript(p2tr.tapLeafScript),
     tapLeafScriptPresent: Array.isArray(p2tr.tapLeafScript) && p2tr.tapLeafScript.length > 0
   };
 }
@@ -419,6 +454,7 @@ function buildTaprootCsvCandidate({ id, label, descriptor, internalXonly32, user
     tapInternalKeyHex: internalXonly32,
     tapMerkleRootHex: p2tr.tapMerkleRoot ? bytesToHex(p2tr.tapMerkleRoot) : "",
     tweakedPubkeyHex: tweakedPubkey ? bytesToHex(tweakedPubkey) : "",
+    tapLeafScript: serializeTapLeafScript(p2tr.tapLeafScript),
     tapLeafScriptPresent: Array.isArray(p2tr.tapLeafScript) && p2tr.tapLeafScript.length > 0
   };
 }
@@ -520,6 +556,7 @@ function clearOutputs() {
   elements.metadataStatus.textContent = "No server lookup yet.";
   elements.recoveryOutput.value = "";
   elements.utxoOutput.value = "";
+  elements.sweepOutput.value = "";
   elements.bitcoinAddress.value = "";
   elements.bitcoinPrivateKey.value = "";
   elements.bitcoinPublicKey.value = "";
@@ -527,6 +564,8 @@ function clearOutputs() {
   elements.ethereumPrivateKey.value = "";
   elements.ethereumPublicKey.value = "";
   elements.exportJson.value = "";
+  lastSweepContext = null;
+  lastSweepTransaction = null;
 }
 
 function prfEvalInput() {
@@ -1200,6 +1239,8 @@ function renderDumpImportOutputs(imported) {
     (sum, result) => sum + (result.ok ? result.utxos.length : 0),
     0
   );
+  lastSweepContext = imported;
+  lastSweepTransaction = null;
   elements.metadataStatus.textContent =
     `${imported.csvCandidates.length} CSV address candidate(s) imported from dump. ` +
     `${totalUtxos} UTXO(s) found.`;
@@ -1232,6 +1273,216 @@ function renderDumpImportOutputs(imported) {
   elements.ethereumPrivateKey.value = "not available from this Bitcoin dump";
   elements.ethereumPublicKey.value = "not available from this Bitcoin dump";
   elements.exportJson.value = JSON.stringify(imported, null, 2);
+}
+
+function parseFeeRate() {
+  const feeRate = Number(elements.feeRate.value);
+  if (!Number.isFinite(feeRate) || feeRate <= 0 || feeRate > 1000) {
+    throw new Error("Fee rate must be between 1 and 1000 sat/vB.");
+  }
+  return feeRate;
+}
+
+function candidateKey(candidate) {
+  return `${candidate.address}|${candidate.csv?.type || ""}|${candidate.csv?.value || ""}`;
+}
+
+function collectSweepInputs(context) {
+  if (!context?.bitcoinKey?.privateKeyHex) {
+    throw new Error("The imported dump does not contain a Bitcoin private key for signing.");
+  }
+  if (!context.bitcoinKey.matchesCsvUserKey) {
+    throw new Error("The imported Bitcoin private key does not match the CSV user key.");
+  }
+
+  const candidateMap = new Map((context.csvCandidates || []).map((candidate) => [candidateKey(candidate), candidate]));
+  const inputs = [];
+  for (const result of context.utxoLookup?.results || []) {
+    if (!result.ok) continue;
+    const candidate = candidateMap.get(`${result.address}|${result.csv?.type || ""}|${result.csv?.value || ""}`);
+    if (!candidate) continue;
+    if (candidate.clientXonly32 !== stripHexPrefix(context.bitcoinKey.userXonly32)) continue;
+    for (const utxo of result.utxos || []) {
+      const status = csvStatus(utxo, result.csv, context.utxoLookup.tipHeight);
+      inputs.push({
+        candidate,
+        utxo,
+        status,
+        valueSats: Math.max(0, Math.trunc(Number(utxo.value) || 0))
+      });
+    }
+  }
+
+  if (!inputs.length) {
+    throw new Error("No signable CSV UTXOs were found for the imported dump.");
+  }
+
+  return inputs;
+}
+
+function addSweepInputs(tx, sweepInputs) {
+  for (const input of sweepInputs) {
+    const candidate = input.candidate;
+    if (!candidate.scriptPubKeyHex || !candidate.tapInternalKeyHex || !candidate.tapMerkleRootHex) {
+      throw new Error(`CSV candidate ${candidate.label} is missing Taproot signing metadata.`);
+    }
+    tx.addInput({
+      txid: input.utxo.txid,
+      index: input.utxo.vout,
+      sequence: candidate.csv?.sequence || candidate.csv?.value,
+      witnessUtxo: {
+        script: hexToBytes(candidate.scriptPubKeyHex),
+        amount: BigInt(input.valueSats)
+      },
+      tapInternalKey: hexToBytes(candidate.tapInternalKeyHex),
+      tapMerkleRoot: hexToBytes(candidate.tapMerkleRootHex),
+      tapLeafScript: hydrateTapLeafScript(candidate.tapLeafScript)
+    });
+  }
+}
+
+function signSweepTx({ sweepInputs, destinationAddress, outputSats, privateKeyHex }) {
+  const tx = new btc.Transaction({ version: 2, allowUnknownInputs: true });
+  addSweepInputs(tx, sweepInputs);
+  tx.addOutputAddress(destinationAddress, BigInt(outputSats), btc.NETWORK);
+  const privateKey = hexToBytes(privateKeyHex);
+  for (let index = 0; index < sweepInputs.length; index += 1) {
+    tx.signIdx(privateKey, index);
+  }
+  tx.finalize();
+  return tx;
+}
+
+function buildSweepTransaction(context) {
+  const destinationAddress = elements.sweepAddress.value.trim();
+  if (!destinationAddress) {
+    throw new Error("Enter a Bitcoin destination address first.");
+  }
+  const feeRate = parseFeeRate();
+  const sweepInputs = collectSweepInputs(context);
+  const privateKeyHex = stripHexPrefix(context.bitcoinKey.privateKeyHex);
+  const totalSats = sweepInputs.reduce((sum, input) => sum + input.valueSats, 0);
+  const probeTx = signSweepTx({
+    sweepInputs,
+    destinationAddress,
+    outputSats: 1,
+    privateKeyHex
+  });
+  const feeSats = Math.ceil(probeTx.vsize * feeRate);
+  const outputSats = totalSats - feeSats;
+  if (outputSats <= 546) {
+    throw new Error(`Fee ${feeSats} sats leaves only ${outputSats} sats; lower the fee rate or wait for more funds.`);
+  }
+
+  const tx = signSweepTx({
+    sweepInputs,
+    destinationAddress,
+    outputSats,
+    privateKeyHex
+  });
+  const latestUnlockHeight = sweepInputs.reduce(
+    (max, input) => Math.max(max, Number(input.status.unlockHeight) || 0),
+    0
+  );
+  const maxBlocksRemaining = sweepInputs.reduce(
+    (max, input) => Math.max(max, Number(input.status.blocksRemaining) || 0),
+    0
+  );
+  const broadcastableNow = sweepInputs.every((input) => input.status.movableAlone);
+
+  return {
+    createdAt: new Date().toISOString(),
+    destinationAddress,
+    inputCount: sweepInputs.length,
+    totalInputSats: totalSats,
+    outputSats,
+    feeSats,
+    feeRateSatVb: feeRate,
+    vsize: tx.vsize,
+    txid: tx.id,
+    rawTxHex: tx.hex,
+    broadcastableNow,
+    latestUnlockHeight: latestUnlockHeight || null,
+    blocksRemaining: maxBlocksRemaining,
+    inputs: sweepInputs.map((input) => ({
+      txid: input.utxo.txid,
+      vout: input.utxo.vout,
+      valueSats: input.valueSats,
+      address: input.candidate.address,
+      csvBlocks: input.candidate.csv.value,
+      confirmedHeight: input.utxo.status?.block_height || null,
+      unlockHeight: input.status.unlockHeight || null,
+      blocksRemaining: input.status.blocksRemaining ?? null,
+      movableAlone: input.status.movableAlone,
+      detail: input.status.detail
+    }))
+  };
+}
+
+function renderSweepTransaction(sweep) {
+  const lines = [
+    `Destination: ${sweep.destinationAddress}`,
+    `Inputs: ${sweep.inputCount}`,
+    `Input total: ${sweep.totalInputSats} sats (${satsToBtc(sweep.totalInputSats)})`,
+    `Output amount: ${sweep.outputSats} sats (${satsToBtc(sweep.outputSats)})`,
+    `Fee: ${sweep.feeSats} sats (${sweep.feeRateSatVb} sat/vB, vsize ${sweep.vsize})`,
+    `TXID: ${sweep.txid}`,
+    sweep.broadcastableNow
+      ? "Broadcast status: ready now"
+      : `Broadcast status: wait until height ${sweep.latestUnlockHeight || "unknown"} (${sweep.blocksRemaining || "unknown"} blocks remaining)`,
+    "",
+    "Raw transaction hex:",
+    sweep.rawTxHex
+  ];
+  elements.sweepOutput.value = lines.join("\n");
+  elements.exportJson.value = JSON.stringify(
+    {
+      ...JSON.parse(elements.exportJson.value || "{}"),
+      sweepTransaction: sweep
+    },
+    null,
+    2
+  );
+}
+
+async function buildSweep() {
+  try {
+    if (!lastSweepContext) {
+      throw new Error("Import a dump with UTXOs before building a sweep transaction.");
+    }
+    setMessage("Building signed CSV sweep transaction...", "neutral");
+    const sweep = buildSweepTransaction(lastSweepContext);
+    lastSweepTransaction = sweep;
+    renderSweepTransaction(sweep);
+    setMessage(
+      sweep.broadcastableNow
+        ? "Signed sweep transaction is ready to broadcast."
+        : "Signed sweep transaction built. Wait for CSV unlock before broadcasting.",
+      sweep.broadcastableNow ? "success" : "neutral"
+    );
+  } catch (error) {
+    lastSweepTransaction = null;
+    setMessage(error.message || String(error), "error");
+  }
+}
+
+async function broadcastSweep() {
+  try {
+    if (!lastSweepTransaction?.rawTxHex) {
+      throw new Error("Build a signed sweep transaction first.");
+    }
+    if (!lastSweepTransaction.broadcastableNow) {
+      throw new Error(
+        `CSV is still locked. Wait until height ${lastSweepTransaction.latestUnlockHeight || "unknown"} before broadcasting.`
+      );
+    }
+    setMessage("Broadcasting signed transaction...", "neutral");
+    const result = await postJson("/api/broadcast", { rawTx: lastSweepTransaction.rawTxHex });
+    elements.sweepOutput.value = `${elements.sweepOutput.value}\n\nBroadcast result:\n${JSON.stringify(result, null, 2)}`;
+    setMessage(`Broadcasted transaction ${result.txid}.`, "success");
+  } catch (error) {
+    setMessage(error.message || String(error), "error");
+  }
 }
 
 async function renderOutputs(result) {
@@ -1344,4 +1595,6 @@ function updateOriginStatus() {
 
 elements.recoverButton.addEventListener("click", recover);
 elements.importDumpButton.addEventListener("click", importDump);
+elements.buildSweepButton.addEventListener("click", buildSweep);
+elements.broadcastSweepButton.addEventListener("click", broadcastSweep);
 updateOriginStatus();
