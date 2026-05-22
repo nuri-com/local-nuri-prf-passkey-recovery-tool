@@ -7925,6 +7925,7 @@
   };
   var lastSweepContext = null;
   var lastSweepTransaction = null;
+  var actionBusy = false;
   function utf82(value) {
     return new TextEncoder().encode(value);
   }
@@ -8352,6 +8353,50 @@
   function setOriginStatus(text, kind = "neutral") {
     elements.originStatus.className = `status ${kind}`;
     elements.originStatus.textContent = text;
+  }
+  function hasImportableDump() {
+    return Boolean(elements.recoveryBundle.value.trim());
+  }
+  function hasSweepDestination() {
+    return Boolean(elements.sweepAddress.value.trim());
+  }
+  function hasSignableSweepContext() {
+    return Boolean(
+      lastSweepContext?.bitcoinKey?.privateKeyHex && lastSweepContext.bitcoinKey.matchesCsvUserKey && lastSweepContext.csvCandidates?.length && lastSweepContext.utxoLookup?.results?.some((result) => result.ok && result.utxos?.length)
+    );
+  }
+  function setButtonState(button, enabled, reason = "") {
+    button.disabled = !enabled;
+    button.title = enabled ? "" : reason;
+    button.setAttribute("aria-disabled", enabled ? "false" : "true");
+  }
+  function updateActionState() {
+    const secureOrigin = window.isSecureContext && window.location.protocol === "https:" && (window.location.hostname === NURI_RP_ID || window.location.hostname.endsWith(`.${NURI_RP_ID}`));
+    const webAuthnReady = Boolean(window.PublicKeyCredential && navigator.credentials?.get);
+    setButtonState(
+      elements.recoverButton,
+      !actionBusy && secureOrigin && webAuthnReady,
+      secureOrigin ? "This browser does not expose WebAuthn." : "Open https://nuri.com:8443 first."
+    );
+    setButtonState(
+      elements.importDumpButton,
+      !actionBusy && hasImportableDump(),
+      "Paste a recovery dump before importing."
+    );
+    setButtonState(
+      elements.buildSweepButton,
+      !actionBusy && hasSignableSweepContext() && hasSweepDestination(),
+      !lastSweepContext ? "Import a recovery dump with UTXOs first." : !hasSignableSweepContext() ? "Imported dump needs a matching Bitcoin private key and UTXOs." : "Enter a sweep destination address first."
+    );
+    setButtonState(
+      elements.broadcastSweepButton,
+      !actionBusy && Boolean(lastSweepTransaction?.rawTxHex) && lastSweepTransaction.broadcastableNow,
+      !lastSweepTransaction?.rawTxHex ? "Build a signed sweep transaction first." : "CSV is still locked; wait until the displayed unlock height."
+    );
+  }
+  function setActionBusy(value) {
+    actionBusy = value;
+    updateActionState();
   }
   function clearOutputs() {
     elements.metadataStatus.textContent = "No server lookup yet.";
@@ -8987,6 +9032,7 @@ ${imported.bitcoinKey.userXonly32}` : "not available in dump";
     elements.ethereumPrivateKey.value = "not available from this Bitcoin dump";
     elements.ethereumPublicKey.value = "not available from this Bitcoin dump";
     elements.exportJson.value = JSON.stringify(imported, null, 2);
+    updateActionState();
   }
   function parseFeeRate() {
     const feeRate = Number(elements.feeRate.value);
@@ -9143,9 +9189,11 @@ ${imported.bitcoinKey.userXonly32}` : "not available in dump";
       null,
       2
     );
+    updateActionState();
   }
   async function buildSweep() {
     try {
+      setActionBusy(true);
       if (!lastSweepContext) {
         throw new Error("Import a dump with UTXOs before building a sweep transaction.");
       }
@@ -9160,10 +9208,13 @@ ${imported.bitcoinKey.userXonly32}` : "not available in dump";
     } catch (error) {
       lastSweepTransaction = null;
       setMessage(error.message || String(error), "error");
+    } finally {
+      setActionBusy(false);
     }
   }
   async function broadcastSweep() {
     try {
+      setActionBusy(true);
       if (!lastSweepTransaction?.rawTxHex) {
         throw new Error("Build a signed sweep transaction first.");
       }
@@ -9181,6 +9232,8 @@ ${JSON.stringify(result, null, 2)}`;
       setMessage(`Broadcasted transaction ${result.txid}.`, "success");
     } catch (error) {
       setMessage(error.message || String(error), "error");
+    } finally {
+      setActionBusy(false);
     }
   }
   async function renderOutputs(result) {
@@ -9234,8 +9287,7 @@ ${JSON.stringify(result, null, 2)}`;
     elements.exportJson.value = JSON.stringify(exportData, null, 2);
   }
   async function recover() {
-    elements.recoverButton.disabled = true;
-    elements.importDumpButton.disabled = true;
+    setActionBusy(true);
     clearOutputs();
     try {
       if (!window.PublicKeyCredential || !navigator.credentials?.get) {
@@ -9251,13 +9303,11 @@ ${JSON.stringify(result, null, 2)}`;
     } catch (error) {
       setMessage(error.message || String(error), "error");
     } finally {
-      elements.recoverButton.disabled = false;
-      elements.importDumpButton.disabled = false;
+      setActionBusy(false);
     }
   }
   async function importDump() {
-    elements.recoverButton.disabled = true;
-    elements.importDumpButton.disabled = true;
+    setActionBusy(true);
     clearOutputs();
     try {
       setMessage("Importing dump and checking UTXOs...", "neutral");
@@ -9267,8 +9317,7 @@ ${JSON.stringify(result, null, 2)}`;
     } catch (error) {
       setMessage(error.message || String(error), "error");
     } finally {
-      elements.recoverButton.disabled = false;
-      elements.importDumpButton.disabled = false;
+      setActionBusy(false);
     }
   }
   function updateOriginStatus() {
@@ -9280,11 +9329,30 @@ ${JSON.stringify(result, null, 2)}`;
     }
     setOriginStatus(`Open https://${NURI_RP_ID}:8443 to recover`, "error");
   }
+  function invalidateDumpImport() {
+    if (lastSweepContext || lastSweepTransaction) {
+      lastSweepContext = null;
+      lastSweepTransaction = null;
+      elements.sweepOutput.value = "";
+    }
+    updateActionState();
+  }
+  function invalidateSweepTransaction() {
+    if (lastSweepTransaction) {
+      lastSweepTransaction = null;
+      elements.sweepOutput.value = "";
+    }
+    updateActionState();
+  }
   elements.recoverButton.addEventListener("click", recover);
   elements.importDumpButton.addEventListener("click", importDump);
   elements.buildSweepButton.addEventListener("click", buildSweep);
   elements.broadcastSweepButton.addEventListener("click", broadcastSweep);
+  elements.recoveryBundle.addEventListener("input", invalidateDumpImport);
+  elements.sweepAddress.addEventListener("input", invalidateSweepTransaction);
+  elements.feeRate.addEventListener("input", invalidateSweepTransaction);
   updateOriginStatus();
+  updateActionState();
 })();
 /*! Bundled license information:
 

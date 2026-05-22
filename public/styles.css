@@ -190,6 +190,10 @@ button:disabled {
   opacity: 0.55;
 }
 
+button:disabled:hover {
+  background: var(--accent);
+}
+
 button.secondary {
   border: 1px solid #c5ceda;
   background: #ffffff;
@@ -198,6 +202,10 @@ button.secondary {
 
 button.secondary:hover {
   background: #eef2f7;
+}
+
+button.secondary:disabled:hover {
+  background: #ffffff;
 }
 
 .status,
