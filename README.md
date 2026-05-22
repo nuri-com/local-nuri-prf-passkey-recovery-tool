@@ -1,6 +1,6 @@
 # Nuri Passkey PRF Recovery
 
-Offline helper for recovering the Nuri Bitcoin and Ethereum keypairs from a passkey scoped to `nuri.com`, plus best-effort Bitcoin CSV exit metadata.
+Offline helper for recovering the Nuri Bitcoin and Ethereum keypairs from a passkey scoped to `nuri.com`, plus Bitcoin CSV exit metadata from passkeys or exported recovery dumps.
 
 This does not bypass WebAuthn. The browser still enforces the RP ID/origin rules, and the user still has to approve the passkey operation. The local app works by serving a tiny HTTPS page as `https://nuri.com:8443` with a locally trusted certificate.
 
@@ -65,6 +65,25 @@ Then:
 3. If the live servers are gone or incomplete, paste a Nuri CSV export, Arkade v4 recovery backup plaintext, public envelope, or descriptor JSON into the recovery bundle field and click again.
 4. Copy the Bitcoin and Ethereum keypairs from the output.
 
+## Dump-Only Import
+
+If the user lost the passkey but still has a Nuri dump, paste it into the recovery dump field and click `Import Dump`.
+
+For legacy Taproot CSV dumps, the tool can derive watch-only CSV addresses from descriptors shaped like:
+
+```text
+tr(<taproot-internal-xonly>,and_v(v:pk(<user-xonly>),older(<csv-blocks>)))
+```
+
+It then queries UTXOs for those addresses and shows:
+
+- total sats/BTC found
+- amount spendable by the client CSV path now
+- amount still CSV locked
+- each UTXO confirmation height, unlock height, and approximate wait
+
+If the dump also contains `keys.bitcoinPrivateKeyHex`, the import view shows that key and checks whether it matches the CSV user key. Without that private key, dump import is watch-only.
+
 ## Live Lookup And Fallback
 
 After the passkey returns the PRF, the browser derives the public client key and credential ID. It sends only those public identifiers to the local server, which tries:
@@ -73,7 +92,7 @@ After the passkey returns the PRF, the browser derives the public client key and
 - `https://sign.nuri.com/v1/info`
 - `https://sign.nuri.com/v2/auth`
 
-If a legacy server pubkey is found, the browser computes the legacy CSV descriptors for the known Nuri CSV policies and asks the local server to query `mempool.space` for those addresses. If live lookup fails, paste the exported recovery material instead.
+If a legacy server pubkey is found, the browser computes the legacy CSV descriptors for the known Nuri CSV policies and asks the local server to query `mempool.space` for those addresses. If live lookup fails, paste the exported recovery material instead. If the pasted material already contains descriptors, the tool scans those descriptor addresses directly and does not need the passkey.
 
 Arkade v4 recovery is not just one descriptor. To enumerate v4 VTXOs and TapTrees after the server is gone, the tool needs the Arkade recovery backup/storage export or equivalent public recovery bundle.
 

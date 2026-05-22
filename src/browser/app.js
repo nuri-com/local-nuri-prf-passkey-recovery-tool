@@ -21,6 +21,7 @@ const LEGACY_CSV_CANDIDATES = [
 
 const elements = {
   recoverButton: document.querySelector("#recoverButton"),
+  importDumpButton: document.querySelector("#importDumpButton"),
   originStatus: document.querySelector("#originStatus"),
   message: document.querySelector("#message"),
   recoveryBundle: document.querySelector("#recoveryBundle"),
@@ -65,6 +66,53 @@ function hexToBytes(value) {
   return out;
 }
 
+function bytesLikeToBytes(value, length) {
+  if (typeof value === "string") {
+    const hex = stripHexPrefix(value);
+    if (/^[0-9a-f]+$/u.test(hex) && hex.length % 2 === 0) {
+      const bytes = hexToBytes(hex);
+      return length == null || bytes.length === length ? bytes : null;
+    }
+    return null;
+  }
+
+  if (value instanceof Uint8Array) {
+    return length == null || value.length === length ? value : null;
+  }
+
+  if (Array.isArray(value)) {
+    if (!value.every((entry) => Number.isInteger(Number(entry)) && Number(entry) >= 0 && Number(entry) <= 255)) {
+      return null;
+    }
+    const bytes = new Uint8Array(value.map((entry) => Number(entry)));
+    return length == null || bytes.length === length ? bytes : null;
+  }
+
+  if (value && typeof value === "object") {
+    const numericKeys = Object.keys(value)
+      .filter((key) => /^\d+$/u.test(key))
+      .map((key) => Number.parseInt(key, 10))
+      .sort((left, right) => left - right);
+    if (!numericKeys.length) return null;
+    const expectedLength = numericKeys[numericKeys.length - 1] + 1;
+    if (!numericKeys.every((key, index) => key === index)) return null;
+    const bytes = new Uint8Array(expectedLength);
+    for (const key of numericKeys) {
+      const byte = Number(value[String(key)]);
+      if (!Number.isInteger(byte) || byte < 0 || byte > 255) return null;
+      bytes[key] = byte;
+    }
+    return length == null || bytes.length === length ? bytes : null;
+  }
+
+  return null;
+}
+
+function bytesLikeToHex(value, length) {
+  const bytes = bytesLikeToBytes(value, length);
+  return bytes ? bytesToHex(bytes) : "";
+}
+
 function normalizeCompressedKey(value) {
   const hex = stripHexPrefix(value);
   return /^(02|03)[0-9a-f]{64}$/u.test(hex) ? hex : "";
@@ -75,6 +123,13 @@ function normalizeXOnly(value) {
   if (/^[0-9a-f]{64}$/u.test(hex)) return hex;
   if (/^(02|03)[0-9a-f]{64}$/u.test(hex)) return hex.slice(2);
   return "";
+}
+
+function normalizePrivateKey(value) {
+  const hex = stripHexPrefix(value);
+  if (!/^[0-9a-f]{64}$/u.test(hex)) return "";
+  const scalar = BigInt(`0x${hex}`);
+  return scalar > 0n && scalar < secp256k1.Point.Fn.ORDER ? hex : "";
 }
 
 function bytesToBase64(bytes) {
@@ -310,6 +365,69 @@ function buildLegacyCsvCandidate({ id, label, clientPk33, serverPk33, csvBlocks 
     tweakedPubkeyHex: tweakedPubkey ? bytesToHex(tweakedPubkey) : "",
     tapLeafScriptPresent: Array.isArray(p2tr.tapLeafScript) && p2tr.tapLeafScript.length > 0
   };
+}
+
+function descriptorWithoutChecksum(descriptor) {
+  return String(descriptor || "").trim().replace(/#[a-z0-9]+$/iu, "");
+}
+
+function parseTaprootCsvDescriptor(descriptor) {
+  const text = descriptorWithoutChecksum(descriptor);
+  const internalMatch = text.match(/^tr\(\s*([^,\s]+)\s*,/iu);
+  const pkMatch = text.match(/pk\(\s*((?:02|03)?[0-9a-f]{64})\s*\)/iu);
+  const csvMatch = text.match(/older\(\s*(\d+)\s*\)/iu);
+  const internalXonly32 = normalizeXOnly(internalMatch?.[1] || "");
+  const userXonly32 = normalizeXOnly(pkMatch?.[1] || "");
+  const csvBlocks = csvMatch ? Number.parseInt(csvMatch[1], 10) : NaN;
+
+  if (!internalXonly32 || !userXonly32 || !Number.isInteger(csvBlocks) || csvBlocks <= 0) {
+    throw new Error("Unsupported descriptor. Expected tr(<xonly>,and_v(v:pk(<xonly>),older(<blocks>))).");
+  }
+
+  return {
+    descriptor: text,
+    internalXonly32,
+    userXonly32,
+    csvBlocks
+  };
+}
+
+function buildTaprootCsvCandidate({ id, label, descriptor, internalXonly32, userXonly32, csvBlocks, source }) {
+  const internalKey = hexToBytes(internalXonly32);
+  const userXOnly = hexToBytes(userXonly32);
+  const leaf = buildLegacyCsvLeaf(userXOnly, csvBlocks);
+  const p2tr = btc.p2tr(internalKey, [leaf], btc.NETWORK, true);
+  const tweakedPubkey = p2tr.tweakedPubkey instanceof Uint8Array ? p2tr.tweakedPubkey : null;
+  const scriptPubKey = p2tr.script instanceof Uint8Array ? p2tr.script : null;
+
+  return {
+    id,
+    label,
+    source,
+    type: "dump-taproot-csv",
+    network: "bitcoin-mainnet",
+    address: p2tr.address || "",
+    descriptor:
+      descriptor || `tr(${internalXonly32},and_v(v:pk(${userXonly32}),older(${csvBlocks})))`,
+    scriptPubKeyHex: scriptPubKey ? bytesToHex(scriptPubKey) : "",
+    csv: {
+      type: "blocks",
+      value: csvBlocks,
+      sequence: csvBlocks
+    },
+    clientXonly32: userXonly32,
+    tapInternalKeyHex: internalXonly32,
+    tapMerkleRootHex: p2tr.tapMerkleRoot ? bytesToHex(p2tr.tapMerkleRoot) : "",
+    tweakedPubkeyHex: tweakedPubkey ? bytesToHex(tweakedPubkey) : "",
+    tapLeafScriptPresent: Array.isArray(p2tr.tapLeafScript) && p2tr.tapLeafScript.length > 0
+  };
+}
+
+function satsToBtc(sats) {
+  const value = BigInt(Math.trunc(Number(sats) || 0));
+  const whole = value / 100000000n;
+  const fraction = String(value % 100000000n).padStart(8, "0");
+  return `${whole}.${fraction} BTC`;
 }
 
 function toChecksumAddress(addressBytes) {
@@ -600,6 +718,38 @@ function collectOutpoints(value, path = "$", out = [], seen = new WeakSet()) {
   return out;
 }
 
+function collectDescriptorEntries(raw) {
+  const entries = [];
+  const seen = new Set();
+  const add = (id, label, value) => {
+    if (typeof value !== "string" || !value.trim()) return;
+    const descriptor = descriptorWithoutChecksum(value);
+    if (!descriptor.startsWith("tr(") || seen.has(descriptor)) return;
+    seen.add(descriptor);
+    entries.push({ id, label, descriptor });
+  };
+
+  const walletDescriptors = raw?.wallet?.descriptors;
+  if (walletDescriptors && typeof walletDescriptors === "object") {
+    add("wallet-external", "Dump wallet external descriptor", walletDescriptors.external);
+    add("wallet-internal", "Dump wallet internal descriptor", walletDescriptors.internal);
+    for (const [key, value] of Object.entries(walletDescriptors)) {
+      if (key !== "external" && key !== "internal") add(`wallet-${key}`, `Dump wallet ${key} descriptor`, value);
+    }
+  }
+
+  const rootDescriptors = raw?.descriptors;
+  if (rootDescriptors && typeof rootDescriptors === "object") {
+    add("root-external", "Dump external descriptor", rootDescriptors.external);
+    add("root-internal", "Dump internal descriptor", rootDescriptors.internal);
+  }
+
+  add("root-descriptor", "Dump descriptor", raw?.descriptor);
+  add("wallet-descriptor", "Dump wallet descriptor", raw?.wallet?.descriptor);
+
+  return entries;
+}
+
 function parseRecoveryBundle() {
   const text = elements.recoveryBundle.value.trim();
   if (!text) {
@@ -611,6 +761,7 @@ function parseRecoveryBundle() {
       aggregatedXonly32: "",
       nuriServerCsv: null,
       legacyCsvBlocks: [],
+      descriptorEntries: [],
       outpoints: []
     };
   }
@@ -634,6 +785,7 @@ function parseRecoveryBundle() {
       return (type === "blocks" || type === "seconds") && Number.isFinite(Number(entry?.value));
     });
     const descriptors = raw?.wallet?.descriptors || raw?.descriptors || {};
+    const descriptorEntries = collectDescriptorEntries(raw);
     const descriptorTexts = [descriptors.external, descriptors.internal, raw?.descriptor]
       .filter((value) => typeof value === "string")
       .join("\n");
@@ -651,6 +803,7 @@ function parseRecoveryBundle() {
         ? { type: String(csvObject.type).toLowerCase(), value: Math.trunc(Number(csvObject.value)) }
         : null,
       legacyCsvBlocks: [...new Set(legacyCsvBlocks)],
+      descriptorEntries,
       outpoints: collectOutpoints(raw)
     };
   } catch (error) {
@@ -662,6 +815,7 @@ function parseRecoveryBundle() {
       aggregatedXonly32: "",
       nuriServerCsv: null,
       legacyCsvBlocks: [],
+      descriptorEntries: [],
       outpoints: []
     };
   }
@@ -719,6 +873,82 @@ function buildRecoveryCandidates({ clientPk33, serverKeys, manual }) {
   return candidates;
 }
 
+function buildDumpCandidates(manual) {
+  if (!manual?.raw || manual.error) return [];
+  const candidates = [];
+
+  for (const entry of manual.descriptorEntries || []) {
+    try {
+      const parsed = parseTaprootCsvDescriptor(entry.descriptor);
+      candidates.push(
+        buildTaprootCsvCandidate({
+          id: `dump-${entry.id}`.replace(/[^a-z0-9._-]/giu, "_"),
+          label: entry.label,
+          source: "pasted-descriptor",
+          ...parsed
+        })
+      );
+    } catch (error) {
+      console.warn("Failed to parse dump descriptor", entry.id, error);
+    }
+  }
+
+  const recoveryData = manual.raw.recoveryData || manual.raw.recovery || manual.raw.csvRecoveryData || null;
+  if (recoveryData && typeof recoveryData === "object") {
+    const internalXonly32 =
+      bytesLikeToHex(recoveryData.tapInternalKey, 32) ||
+      bytesLikeToHex(recoveryData.internalKey, 32) ||
+      normalizeXOnly(recoveryData.tapInternalKeyHex || recoveryData.internalKeyHex || "");
+    const userXonly32 =
+      bytesLikeToHex(recoveryData.userXOnly, 32) ||
+      bytesLikeToHex(recoveryData.userXonly, 32) ||
+      normalizeXOnly(recoveryData.userXOnlyHex || recoveryData.userXonlyHex || "");
+    const csvBlocks = Math.trunc(
+      Number(recoveryData.csvBlocks || manual.raw.wallet?.info?.csvBlocks || manual.legacyCsvBlocks?.[0] || 0)
+    );
+
+    if (internalXonly32 && userXonly32 && Number.isInteger(csvBlocks) && csvBlocks > 0) {
+      try {
+        candidates.push(
+          buildTaprootCsvCandidate({
+            id: "dump-recovery-data",
+            label: "Dump recoveryData Taproot CSV",
+            source: "pasted-recovery-data",
+            internalXonly32,
+            userXonly32,
+            csvBlocks
+          })
+        );
+      } catch (error) {
+        console.warn("Failed to build dump recoveryData candidate", error);
+      }
+    }
+  }
+
+  return dedupeCandidates(candidates);
+}
+
+function dedupeCandidates(candidates) {
+  const byKey = new Map();
+  for (const candidate of candidates) {
+    if (!candidate?.address) continue;
+    const key = `${candidate.address}|${candidate.csv?.type || ""}|${candidate.csv?.value || ""}`;
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, {
+        ...candidate,
+        labels: [candidate.label].filter(Boolean),
+        sources: [candidate.source || candidate.type].filter(Boolean)
+      });
+      continue;
+    }
+    if (candidate.label && !existing.labels.includes(candidate.label)) existing.labels.push(candidate.label);
+    if (candidate.source && !existing.sources.includes(candidate.source)) existing.sources.push(candidate.source);
+    existing.label = existing.labels.join(" / ");
+  }
+  return [...byKey.values()];
+}
+
 async function lookupRecoveryMetadata({ credentialId, clientPk33 }) {
   try {
     return await postJson("/api/recovery-metadata", { credentialId, clientPk33 });
@@ -756,7 +986,34 @@ function formatMetadataStatus(metadata, serverKeys) {
 
 function formatUtxoReport(utxoLookup, pastedOutpoints) {
   const lines = [];
+  let totalSats = 0;
+  let readySats = 0;
+  let lockedSats = 0;
+  let unconfirmedSats = 0;
+  let unknownSats = 0;
+
+  for (const result of utxoLookup?.results || []) {
+    if (!result.ok) continue;
+    for (const utxo of result.utxos || []) {
+      const value = Math.max(0, Math.trunc(Number(utxo.value) || 0));
+      const status = csvStatus(utxo, result.csv, utxoLookup.tipHeight);
+      totalSats += value;
+      if (status.state === "ready") readySats += value;
+      else if (status.state === "locked") lockedSats += value;
+      else if (status.state === "unconfirmed") unconfirmedSats += value;
+      else unknownSats += value;
+    }
+  }
+
+  if (utxoLookup?.ok === false && utxoLookup.error) lines.push(`UTXO lookup failed: ${utxoLookup.error}`);
   if (utxoLookup?.tipHeight != null) lines.push(`Bitcoin tip height: ${utxoLookup.tipHeight}`);
+  if (utxoLookup?.results?.length) {
+    lines.push(`Total UTXO value: ${totalSats} sats (${satsToBtc(totalSats)})`);
+    lines.push(`Movable by client CSV now: ${readySats} sats (${satsToBtc(readySats)})`);
+    lines.push(`Still CSV locked: ${lockedSats} sats (${satsToBtc(lockedSats)})`);
+    if (unconfirmedSats) lines.push(`Unconfirmed: ${unconfirmedSats} sats (${satsToBtc(unconfirmedSats)})`);
+    if (unknownSats) lines.push(`Unknown CSV status: ${unknownSats} sats (${satsToBtc(unknownSats)})`);
+  }
 
   for (const result of utxoLookup?.results || []) {
     lines.push("");
@@ -772,9 +1029,11 @@ function formatUtxoReport(utxoLookup, pastedOutpoints) {
     }
     for (const utxo of result.utxos) {
       const status = csvStatus(utxo, result.csv, utxoLookup.tipHeight);
+      const block = utxo.status?.block_height ? ` confirmed_height=${utxo.status.block_height}` : "";
+      const unlock = status.unlockHeight ? ` unlock_height=${status.unlockHeight}` : "";
       lines.push(
         `  ${utxo.txid}:${utxo.vout} value=${utxo.value} sats confirmed=${utxo.status?.confirmed ? 1 : 0} ` +
-          `move_alone=${status.movableAlone ? 1 : 0} ${status.detail}`
+          `move_alone=${status.movableAlone ? 1 : 0}${block}${unlock} ${status.detail}`
       );
     }
   }
@@ -803,7 +1062,10 @@ function missingRecoveryMaterial({ metadata, manual, serverKeys, candidates }) {
   const missing = [];
   const hasLegacyKey = serverKeys.some((entry) => entry.kind === "legacy" || entry.kind === "manual");
   const hasArkade = serverKeys.some((entry) => entry.kind === "arkade-v4");
-  if (!hasLegacyKey) missing.push("legacy server/cosigner compressed pubkey for old Bitcoin CSV descriptors");
+  const hasDumpCandidate = candidates.some((entry) => entry.type === "dump-taproot-csv");
+  if (!hasLegacyKey && !hasDumpCandidate) {
+    missing.push("legacy server/cosigner compressed pubkey for old Bitcoin CSV descriptors");
+  }
   if (hasArkade && !manual.present) {
     missing.push("Arkade v4 recovery backup/storage paste to enumerate VTXOs and TapTrees");
   }
@@ -821,7 +1083,9 @@ async function buildRecoveryContext({ bitcoin, credentialId }) {
   const manual = parseRecoveryBundle();
   const metadata = await lookupRecoveryMetadata({ credentialId, clientPk33 });
   const serverKeys = collectServerKeys(metadata, manual);
-  const candidates = buildRecoveryCandidates({ clientPk33, serverKeys, manual });
+  const serverCandidates = buildRecoveryCandidates({ clientPk33, serverKeys, manual });
+  const dumpCandidates = buildDumpCandidates(manual);
+  const candidates = dedupeCandidates([...serverCandidates, ...dumpCandidates]);
   const utxoLookup = await lookupUtxos(candidates).catch((error) => ({
     ok: false,
     error: error.message || String(error),
@@ -839,16 +1103,135 @@ async function buildRecoveryContext({ bitcoin, credentialId }) {
       aggregatedXonly32: manual.aggregatedXonly32 || "",
       nuriServerCsv: manual.nuriServerCsv,
       legacyCsvBlocks: manual.legacyCsvBlocks,
+      descriptorCount: manual.descriptorEntries.length,
       outpointCount: manual.outpoints.length
     },
     serverKeys,
     legacyCsvCandidates: candidates,
+    dumpCsvCandidates: dumpCandidates,
     utxoLookup,
     pastedOutpoints: manual.outpoints,
     missing,
     statusText: formatMetadataStatus(metadata, serverKeys),
     utxoText: formatUtxoReport(utxoLookup, manual.outpoints)
   };
+}
+
+function importedBitcoinKey(raw, candidates) {
+  const privateKeyHex = normalizePrivateKey(
+    raw?.keys?.bitcoinPrivateKeyHex ||
+      raw?.keys?.bitcoin?.privateKeyHex ||
+      raw?.bitcoin?.privateKeyHex ||
+      findStringByKeys(raw, ["bitcoinPrivateKeyHex"])
+  );
+  if (!privateKeyHex) return null;
+
+  const privateKey = hexToBytes(privateKeyHex);
+  const point = secp256k1.Point.BASE.multiply(bytesToNumberBE(privateKey));
+  const compressedHex = bytesToHex(point.toBytes(true));
+  const userXonly32 = compressedHex.slice(2);
+
+  return {
+    privateKeyHex: `0x${privateKeyHex}`,
+    privateKeyWif: privateKeyToWif(privateKey),
+    publicKeyCompressedHex: `0x${compressedHex}`,
+    userXonly32: `0x${userXonly32}`,
+    matchesCsvUserKey: candidates.some((candidate) => candidate.clientXonly32 === userXonly32)
+  };
+}
+
+function formatCandidateAddresses(candidates) {
+  if (!candidates.length) return "";
+  return candidates
+    .map((candidate) => `${candidate.label}\n${candidate.address}\nCSV: ${candidate.csv.value} blocks`)
+    .join("\n\n");
+}
+
+async function buildDumpImportContext() {
+  const manual = parseRecoveryBundle();
+  if (!manual.present) {
+    throw new Error("Paste a Nuri recovery dump first.");
+  }
+  if (manual.error) {
+    throw new Error(`Dump JSON could not be parsed: ${manual.error}`);
+  }
+
+  const candidates = buildDumpCandidates(manual);
+  if (!candidates.length && !manual.outpoints.length) {
+    throw new Error("The dump did not contain a supported Taproot CSV descriptor or recoveryData object.");
+  }
+
+  const utxoLookup = await lookupUtxos(candidates).catch((error) => ({
+    ok: false,
+    error: error.message || String(error),
+    tipHeight: null,
+    results: []
+  }));
+  const bitcoinKey = importedBitcoinKey(manual.raw, candidates);
+  const missing = [];
+  if (!bitcoinKey) missing.push("bitcoin private key missing; this import is watch-only");
+  if (!candidates.length) missing.push("scanable Taproot CSV descriptor/address missing");
+
+  return {
+    createdAt: new Date().toISOString(),
+    recoveryMode: "import-dump",
+    dump: {
+      version: manual.raw.version ?? null,
+      createdAt: manual.raw.createdAt ?? null,
+      network: manual.raw.network || manual.raw.wallet?.info?.network || "unknown"
+    },
+    bitcoinKey,
+    manual: {
+      present: true,
+      descriptorCount: manual.descriptorEntries.length,
+      legacyCsvBlocks: manual.legacyCsvBlocks,
+      outpointCount: manual.outpoints.length
+    },
+    csvCandidates: candidates,
+    utxoLookup,
+    pastedOutpoints: manual.outpoints,
+    missing,
+    utxoText: formatUtxoReport(utxoLookup, manual.outpoints)
+  };
+}
+
+function renderDumpImportOutputs(imported) {
+  const totalUtxos = (imported.utxoLookup.results || []).reduce(
+    (sum, result) => sum + (result.ok ? result.utxos.length : 0),
+    0
+  );
+  elements.metadataStatus.textContent =
+    `${imported.csvCandidates.length} CSV address candidate(s) imported from dump. ` +
+    `${totalUtxos} UTXO(s) found.`;
+  elements.recoveryOutput.value = JSON.stringify(
+    {
+      dump: imported.dump,
+      bitcoinKey: imported.bitcoinKey
+        ? {
+            publicKeyCompressedHex: imported.bitcoinKey.publicKeyCompressedHex,
+            userXonly32: imported.bitcoinKey.userXonly32,
+            matchesCsvUserKey: imported.bitcoinKey.matchesCsvUserKey
+          }
+        : null,
+      csvCandidates: imported.csvCandidates,
+      manual: imported.manual,
+      missing: imported.missing
+    },
+    null,
+    2
+  );
+  elements.utxoOutput.value = imported.utxoText;
+  elements.bitcoinAddress.value = formatCandidateAddresses(imported.csvCandidates);
+  elements.bitcoinPrivateKey.value = imported.bitcoinKey
+    ? `${imported.bitcoinKey.privateKeyHex}\nWIF: ${imported.bitcoinKey.privateKeyWif}\nMatches CSV user key: ${imported.bitcoinKey.matchesCsvUserKey ? "yes" : "no"}`
+    : "not available in dump";
+  elements.bitcoinPublicKey.value = imported.bitcoinKey
+    ? `${imported.bitcoinKey.publicKeyCompressedHex}\n${imported.bitcoinKey.userXonly32}`
+    : "not available in dump";
+  elements.ethereumAddress.value = "not available from this Bitcoin dump";
+  elements.ethereumPrivateKey.value = "not available from this Bitcoin dump";
+  elements.ethereumPublicKey.value = "not available from this Bitcoin dump";
+  elements.exportJson.value = JSON.stringify(imported, null, 2);
 }
 
 async function renderOutputs(result) {
@@ -886,6 +1269,7 @@ async function renderOutputs(result) {
     {
       serverKeys: recovery.serverKeys,
       legacyCsvCandidates: recovery.legacyCsvCandidates,
+      dumpCsvCandidates: recovery.dumpCsvCandidates,
       manual: recovery.manual,
       missing: recovery.missing,
       metadataAttempts: recovery.metadata.attempts || []
@@ -905,6 +1289,7 @@ async function renderOutputs(result) {
 
 async function recover() {
   elements.recoverButton.disabled = true;
+  elements.importDumpButton.disabled = true;
   clearOutputs();
 
   try {
@@ -923,6 +1308,25 @@ async function recover() {
     setMessage(error.message || String(error), "error");
   } finally {
     elements.recoverButton.disabled = false;
+    elements.importDumpButton.disabled = false;
+  }
+}
+
+async function importDump() {
+  elements.recoverButton.disabled = true;
+  elements.importDumpButton.disabled = true;
+  clearOutputs();
+
+  try {
+    setMessage("Importing dump and checking UTXOs...", "neutral");
+    const imported = await buildDumpImportContext();
+    renderDumpImportOutputs(imported);
+    setMessage("Imported dump and checked CSV UTXO status.", "success");
+  } catch (error) {
+    setMessage(error.message || String(error), "error");
+  } finally {
+    elements.recoverButton.disabled = false;
+    elements.importDumpButton.disabled = false;
   }
 }
 
@@ -939,4 +1343,5 @@ function updateOriginStatus() {
 }
 
 elements.recoverButton.addEventListener("click", recover);
+elements.importDumpButton.addEventListener("click", importDump);
 updateOriginStatus();

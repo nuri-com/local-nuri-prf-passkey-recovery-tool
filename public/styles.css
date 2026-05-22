@@ -163,6 +163,12 @@ textarea:focus {
   font-size: 1.08rem;
 }
 
+.buttonRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr);
+  gap: 10px;
+}
+
 button {
   min-height: 44px;
   border: 0;
@@ -248,5 +254,9 @@ button.secondary:hover {
 
   .actions button {
     width: 100%;
+  }
+
+  .buttonRow {
+    grid-template-columns: 1fr;
   }
 }
