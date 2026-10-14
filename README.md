@@ -8,6 +8,129 @@ Recover the raw WebAuthn PRF output and the Nuri Bitcoin and Ethereum private ke
 
 > This is an emergency recovery tool. It deliberately shows the raw PRF output and private keys. That is the product, not a leak. Run reviewed source on a trusted computer, disconnect that computer from the network, recover, then remove the temporary local certificate and hosts entry.
 
+Who it is for: holders of a Nuri passkey who need their wallet keys without any Nuri server.
+
+## Logs
+
+- [CHANGELOG.md](CHANGELOG.md): release notes, newest first
+- [PROMPTLOG.md](PROMPTLOG.md): rules and prompts that shaped this repo
+
+## Status
+
+| Field | Value |
+| --- | --- |
+| Version | v0.2.0 |
+| Date | 2026-10-14 |
+| Updated by | hermes-agent for emino |
+| Default branch HEAD | `cd565c23` (main) |
+| Deployment | not deployed. Runs locally on the recovery machine at `https://nuri.com:8443` via `run.sh`, `run.ps1` or the `Dockerfile` |
+
+Note: `package.json` still says `0.1.0`. The release version follows [CHANGELOG.md](CHANGELOG.md).
+
+## Architecture
+
+```mermaid
+flowchart LR
+    subgraph Host["Recovery machine"]
+        Browser["Browser at https://nuri.com:8443"]
+        App["public/app.bundle.js built from src/browser/app.js"]
+        Server["src/server.mjs local HTTPS server"]
+        Certs["certs/ local CA and nuri.com cert"]
+        Config["config/recovery.json optional"]
+        Hosts["hosts entry 127.0.0.1 nuri.com"]
+    end
+    Auth["Authenticator holding the Nuri passkey"]
+    Arkade["arkade.nuri.com/v4 optional"]
+    Sign["sign.nuri.com v1 and v2 optional"]
+    Mempool["mempool.space/api optional"]
+
+    Hosts --> Browser
+    Server -->|"serves static files"| Browser
+    Certs --> Server
+    Config --> Server
+    Browser --> App
+    App -->|"WebAuthn get with PRF"| Auth
+    App -->|"/api/* public identifiers only"| Server
+    Server -.->|"recovery metadata"| Arkade
+    Server -.->|"recovery metadata"| Sign
+    Server -.->|"tip height, UTXOs, broadcast"| Mempool
+```
+
+PRF evaluation, key derivation and transaction signing run in the browser. Dotted lines are optional and fail harmlessly offline.
+
+## User flow
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant Setup as setup-local.sh or setup-windows.ps1
+    participant Server as Local server
+    participant Page as Recovery page
+    participant Auth as Authenticator
+    User->>Setup: generate certs, trust local CA, add hosts entry
+    User->>Server: disconnect network, run.sh or run.ps1
+    User->>Page: open https://nuri.com:8443
+    User->>Page: click Recover Keypairs
+    Page->>Auth: navigator.credentials.get with PRF input
+    Auth-->>Page: assertion and PRF result after user verification
+    Page->>Page: derive Bitcoin and Ethereum keys locally
+    Page->>Server: optional metadata and UTXO lookup
+    User->>Page: optional Import Dump, Build Sweep TX
+    User->>Page: Broadcast TX only after CSV unlock and only when online
+    User->>Setup: remove CA trust, hosts entry and certs/
+```
+
+## Components
+
+| Component | Path | Role |
+| --- | --- | --- |
+| Browser recovery logic | `src/browser/app.js` | WebAuthn PRF, HKDF and BIP32 derivation, dump parsing, CSV analysis, sweep signing |
+| Browser bundle | `public/app.bundle.js` | Committed esbuild output that the offline runtime serves |
+| Recovery page | `public/index.html`, `public/styles.css` | Local UI with Recover Keypairs, Import Dump, Build Sweep TX, Broadcast TX |
+| Local server | `src/server.mjs` | Node.js HTTPS server, static files, optional metadata, UTXO and broadcast helpers |
+| Config example | `config/recovery.example.json` | Template for optional `config/recovery.json` (gitignored) |
+| Cert generator | `scripts/gen-certs.sh` | Creates local CA and `nuri.com` certificate in `certs/` |
+| Setup macOS/Linux | `scripts/setup-local.sh`, `scripts/setup-macos.sh` | Certs, CA trust and hosts entry |
+| Setup Windows | `scripts/setup-windows.ps1` | Certs, CA trust and hosts entry |
+| Launchers | `run.sh`, `run.ps1` | Start the local server with `DOMAIN`, `PORT`, `HOST` |
+| Container | `Dockerfile` | `node:22-alpine` image running `src/server.mjs` on port 8443 |
+
+## API / Endpoints
+
+All routes are served by `src/server.mjs` on the local machine. No auth: the server binds to `127.0.0.1` by default. JSON bodies are capped at 256 KiB.
+
+| Method | Path | Auth | Purpose |
+| --- | --- | --- | --- |
+| GET | `/api/health` | none | Liveness, request ID and RP ID |
+| GET | `/api/config` | none | Merged recovery config from defaults and optional `config/recovery.json` |
+| POST | `/api/recovery-metadata` | none | Looks up public recovery metadata by credential ID and client public key at Arkade v4 and legacy sign endpoints. Strips `token` and `challenge` from responses |
+| POST | `/api/utxos` | none | Tip height and UTXOs for up to 32 addresses via the mempool API |
+| POST | `/api/broadcast` | none | Broadcasts a signed raw transaction via the mempool API |
+| GET | `/*` | none | Static files from `public/` with a strict CSP |
+
+## Run
+
+```sh
+# offline recovery, macOS or Linux
+./scripts/setup-local.sh
+./run.sh
+
+# rebuild and verify the committed bundle, on a connected build machine
+npm ci
+npm run check
+git diff --exit-code -- public/app.bundle.js
+
+# server only
+npm start
+```
+
+npm scripts: `build:browser`, `start`, `check`. No test suite in the repo. Node.js 20 or newer.
+
+Env var names read by `src/server.mjs`: `HOST`, `PORT`, `DOMAIN`, `CERT`, `KEY`, `CONFIG`, `REMOTE_TIMEOUT_MS`, `ARKADE_V4_URL`, `LEGACY_SIGN_URLS`, `MEMPOOL_API_URL`.
+Env var names read by scripts: `DOMAIN`, `PORT`, `HOST`, `CERT_DIR`, `OPENSSL`.
+
+Full step-by-step recovery, cleanup and threat model follow below.
+
 ## Basically
 
 A Nuri passkey does not only prove that you are you.
